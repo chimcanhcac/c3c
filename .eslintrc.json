@@ -121,7 +121,7 @@
         "newline-per-chained-call": "off",
         "no-alert": "error",
         "no-array-constructor": "error",
-        "no-await-in-loop": "error",
+        "no-await-in-loop": "off",
         "no-bitwise": "off",
         "no-buffer-constructor": "error",
         "no-caller": "error",
@@ -263,7 +263,7 @@
             "error",
             "as-needed"
         ],
-        "require-await": "error",
+        "require-await": "off",
         "require-jsdoc": "off",
         "require-unicode-regexp": "off",
         "rest-spread-spacing": [

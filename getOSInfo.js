@@ -23,8 +23,6 @@ switch (os.platform()) {
       .join(" ");
     break;
   case "linux":
-    // Edited on iPhone 5s. kill me plz
-    // https://playerduo.com/c3cbotadmin
     try {
       osName = childProcess
         .execSync("lsb_release -d", {
@@ -44,6 +42,7 @@ switch (os.platform()) {
         })
         .slice(1)
         .join(" ");
+      if (os.release().endsWith("+")) osName += " (Android/TermUX)";
     } catch (ex) {
       osName = childProcess
         .execSync("cat /etc/*-release", {
@@ -94,7 +93,23 @@ switch (os.platform()) {
     osName = `OpenBSD ${os.release()}`;
     break;
   case "darwin":
-    osName = `macOS version parsing not implented`;
+    osName = childProcess
+      .execSync(`sw_vers -productVersion`, {
+        shell: true
+      })
+      .toString()
+      .split("\n")[0]
+      .replace((/”/g), "\"")
+      .replace((/“/g), "\"")
+      .split(/((?:"[^"\\]*(?:\\[\S\s][^"\\]*)*"|'[^'\\]*(?:\\[\S\s][^'\\]*)*'|\/[^/\\]*(?:\\[\S\s][^/\\]*)*\/[gimy]*(?=\s|$)|(?:\\\s|\S))+)(?=\s|$)/)
+      .filter(function(el) {
+        return !(el == null || el == "" || el == " " || !el.replace(/\s/g, '')
+          .length);
+      })
+      .map(function(z) {
+        return z.replace(/"/g, "");
+      })
+      .join(" ");
     break;
   case "android":
     osName = `Android version parsing not implented`;

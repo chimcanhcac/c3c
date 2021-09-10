@@ -72,6 +72,9 @@ fbstate.json
 plugins/*/*
 plugins/package-lock.json
 plugins/node_modules/
+plugins/node_modules/*
+plugins/node_modules/*/*
 plugins/package.json
 appstate/
 sshkey.json
+bot_description.txt

@@ -1,3 +1,5 @@
+const metricServer = "metric.c3c.tech";
+
 var fetch = require("node-fetch");
 //const url = require('url');
 
@@ -13,9 +15,10 @@ module.exports = {
       prResolve = resolve;
       prReject = reject;
     });
-    fetch("https://c3c-metric.com/metric.php", {
+    fetch(`https://${metricServer}/metric.php`, {
         method: "POST",
-        body: params
+        body: params,
+        headers: { 'User-Agent': `C3C-metric` }
       })
       .then(function(f) {
         if (f.status == 200) {
@@ -36,9 +39,10 @@ module.exports = {
                     prResolve = resolve;
                     prReject = reject;
                   });
-                  fetch("https://c3c-metric.com/metric.php", {
+                  fetch(`https://${metricServer}/metric.php`, {
                       method: "POST",
-                      body: params
+                      body: params,
+                      headers: { 'User-Agent': `C3C-metric` }
                     })
                     .then(function(f) {
                       if (f.status == 200) {
@@ -46,7 +50,13 @@ module.exports = {
                       } else {
                         f.text()
                           .then(err => {
-                            prReject([new Error(`HTTP ${f.status}: ${err}`), (f.status == 400), true]);
+                            switch (f.status) {
+                              case 503:
+                              case 521:
+                                return prReject([new Error(`Metric server is under DDoS attack.`), false]);
+                              default:
+                                return prReject([new Error(`HTTP ${f.status}: ${err}`), (f.status == 400)]);
+                            }
                           });
                       }
                     })
@@ -85,9 +95,10 @@ module.exports = {
       prResolve = resolve;
       prReject = reject;
     });
-    fetch("https://c3c-metric.com/metric.php", {
+    fetch(`https://${metricServer}/metric.php`, {
         method: "POST",
-        body: params
+        body: params,
+        headers: { 'User-Agent': `C3C-metric` }
       })
       .then(function(f) {
         if (f.status == 200) {
@@ -98,7 +109,13 @@ module.exports = {
         } else {
           f.text()
             .then(err => {
-              prReject([new Error(`HTTP ${f.status}: ${err}`), (f.status == 400)]);
+              switch (f.status) {
+                case 503:
+                case 521:
+                  return prReject([new Error(`Metric server is under DDoS attack.`), false]);
+                default:
+                  return prReject([new Error(`HTTP ${f.status}: ${err}`), (f.status == 400)]);
+              }
             });
         }
       })

