@@ -1,0 +1,55 @@
+{
+   " testmode " : false ,
+   " baseprefix " : " [Bot] " ,
+   " botname " : " C3CBot " ,
+   " enablefb " : false ,
+   " usefbappstate " : true ,
+   " fbemail " : " " ,
+   " fbpassword " : " " ,
+   "fb2fasecret " :" BASE32OFSECRETKEY " ,
+   " fbuseragent " : " Mozilla / 5.0 (Windows NT 10.0; Win64; x64) AppleWebKit / 537.36 (KHTML, như Gecko) Chrome / 80.0.3987.116 Safari / 537.36 " ,
+   " fblistenwhitelist " : false ,
+   " fblisten " : [
+     " 0 "
+  ],
+  " facebookAutoRestartLoggedOut " : true ,
+   " facebookProxy " : null ,
+   " facebookProxyUseSOCKS " : false ,
+   " portSOCK2HTTP " : 0 ,
+   " addressSOCK2HTTP " : " 127.0.0.1 " ,
+   " enableiscord " : false ,
+   " discordtoken " : " " ,
+   "discordlistenwhitelist ": false ,
+   " discordlisten " : [
+     " 0 "
+  ],
+  " quản trị viên " : [
+     " FB-0 " ,
+     " DC-0 "
+  ],
+  " blacklistedUsers " : [
+     " FB-0 " , 
+     " DC-0 "
+  ],
+  " AllowAdminUseRestartCommand " : đúng ,
+   " allowAdminUseShutdownCommand " : sai ,
+   " allowUserUsePluginsCommand " : đúng ,
+   " allowUserUseReloadCommand " : sai ,
+   " ngôn ngữ " : " en_US " ,
+   " allowEveryoneTagEvenBlacklisted " : đúng ,
+   " DEBUG_FCA_LOGLEVEL " : "lỗi " ,
+  " enableSSHRemoteConsole " : false ,
+   " sshRemoteConsoleIP " : " 0.0.0.0 " ,
+   " sshRemoteConsolePort " : 2004 ,
+   " sshUsername " : " admin " ,
+   " sshPassword " : " c3cbot @ ADMIN " ,
+   " commandPrefix " : " / " ,
+   " autoUpdate ": đúng ,
+  " autoUpdateTimer " : 60 ,
+   " configVersion " : 1 ,
+   " enableMetric " : true ,
+   " metricHideBotAccountLink " : true ,
+   " enableGlobalBan " : true ,
+   " hideUnknownCommandMessage " : false ,
+   " herokuApplication " : " " 
+}
